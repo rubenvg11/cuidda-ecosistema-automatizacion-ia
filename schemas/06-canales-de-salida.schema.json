@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cuidda.info/schemas/06-canales-de-salida.schema.json",
+  "title": "Payloads de los canales de salida · Slack y Gmail",
+  "description": "Los dos canales de salida del ecosistema y cómo se mapea el hilo (thread) en cada uno.",
+  "type": "object",
+  "properties": {
+    "slack": {
+      "title": "slack:CreateMessage v4",
+      "type": "object",
+      "required": ["channelWType", "channel", "text"],
+      "properties": {
+        "channelWType": { "const": "manualy" },
+        "channel": {
+          "type": "string",
+          "description": "NO está hardcodeado. Sale de la tabla Configuracion en runtime: {{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}. Cambiar de canal es editar una fila de Airtable, no tocar el escenario."
+        },
+        "text": { "type": "string" },
+        "mrkdwn": { "const": true },
+        "parse": { "const": false },
+        "thread_ts": {
+          "type": "string",
+          "description": "MAPEO DE THREAD ID. En el Escenario 1 el mensaje [19] es el mensaje raíz y su 'ts' se guarda en Solicitudes.Slack ts con el módulo [20]. En el Escenario 2, los mensajes [6] y [9] usan ese valor como thread_ts, así que la conversación completa de una solicitud queda en un solo hilo de Slack.",
+          "examples": ["1758331234.001500"]
+        }
+      },
+      "x-salida": { "ts": "string · timestamp del mensaje publicado, que es su identificador de hilo" }
+    },
+    "gmail": {
+      "title": "google-email:sendAnEmail v4",
+      "type": "object",
+      "required": ["to", "subject", "bodyType", "content"],
+      "properties": {
+        "to": { "type": "array", "items": { "type": "string", "format": "email" }, "maxItems": 1 },
+        "subject": { "type": "string" },
+        "bodyType": { "const": "text" },
+        "content": { "type": "string" },
+        "emailHeaders": {
+          "type": "array",
+          "description": "MAPEO DE THREAD ID EN GMAIL. El módulo de Make no expone un campo threadId, así que el hilo se arma de la forma estándar de correo: reinyectando el Message-ID del correo original de la familia en las cabeceras In-Reply-To y References. Gmail agrupa la respuesta en la misma conversación.",
+          "items": {
+            "type": "object",
+            "required": ["key"],
+            "properties": {
+              "key": { "type": "string", "enum": ["In-Reply-To", "References"] },
+              "value": { "type": "string" }
+            }
+          },
+          "examples": [
+            [
+              { "key": "In-Reply-To", "value": "<CAJ...@mail.gmail.com>" },
+              { "key": "References", "value": "<CAJ...@mail.gmail.com>" }
+            ]
+          ]
+        }
+      }
+    }
+  },
+  "x-por-que-no-whatsapp": "La consigna permite Gmail, Slack o WhatsApp API. Se eligió Gmail + Slack porque la entrada del sistema ya es un correo: responder por el mismo canal mantiene el hilo y no obliga a la familia a instalar nada. WhatsApp Business API exigiría una plantilla aprobada por Meta y números en formato internacional por cada variante de mensaje, y el mensaje de propuesta de Cuidda es demasiado largo y variable para una plantilla. Queda documentado como el siguiente canal a sumar, no como un olvido."
+}

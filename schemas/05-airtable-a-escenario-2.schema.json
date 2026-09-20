@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cuidda.info/schemas/05-airtable-a-escenario-2.schema.json",
+  "title": "Airtable → Escenario 2 · handoff entre escenarios",
+  "description": "Airtable no es solo el destino del Escenario 1: es el bus de mensajes entre los dos escenarios. El trigger [1] del Escenario 2 (airtable:TriggerWatchRecords) solo entrega registros que cumplen la fórmula de aprobación, así que este esquema es el contrato del handoff.",
+  "type": "object",
+  "required": ["id", "Codigo", "Email", "Familia", "Estado", "Aprobado por Humano"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^rec[A-Za-z0-9]{14}$",
+      "description": "Record id de Airtable. El módulo [8] lo usa para cerrar el ciclo con ActionUpdateRecords."
+    },
+    "Codigo": { "type": "string", "pattern": "^SOL-[0-9]{8}-[0-9]{6}$" },
+    "Familia": { "type": "string" },
+    "Email": { "type": "string", "format": "email" },
+    "Propuesta generada": {
+      "type": "string",
+      "description": "Cuerpo del correo. Si llega vacío, el Router [4] manda el bundle a la ruta A y NO se envía nada."
+    },
+    "Monto estimado": { "type": "integer" },
+    "Estado": { "const": "Aprobado" },
+    "Aprobado por Humano": { "const": true },
+    "Message ID Gmail": {
+      "type": "string",
+      "description": "Se reinyecta como cabecera In-Reply-To y References para que la propuesta caiga en el hilo original de la familia."
+    },
+    "Slack ts": {
+      "type": "string",
+      "description": "Se reinyecta como thread_ts para que la confirmación cuelgue del mismo mensaje de aprobación."
+    },
+    "Modificado": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Campo Last modified time. Es el trigger field: Make ordena por él y usa un epoch para no reprocesar lo ya visto."
+    }
+  },
+  "x-formula-del-trigger": "AND({Aprobado por Humano} = 1, {Estado} = \"Aprobado\")",
+  "x-trigger-inteligente": "El epoch se configura en 'From now on'. Make guarda la marca de tiempo del arranque y nunca vuelve atrás; combinado con la fórmula, un registro solo entra una vez.",
+  "x-anti-loop": "El módulo [8] deja Estado = 'Enviado'. Eso modifica el campo 'Modificado' y vuelve a disparar el trigger, PERO el registro ya no cumple la fórmula (Estado ya no es 'Aprobado'), así que el trigger lo descarta y el ciclo se cierra. Ese es el corte del loop infinito: no depende de un contador ni de un delay, sino de que la condición de entrada deje de ser verdadera."
+}

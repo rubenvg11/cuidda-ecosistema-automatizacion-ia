@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cuidda.info/schemas/04-log-de-errores.schema.json",
+  "title": "Registro escrito en Airtable · tabla Log de errores",
+  "description": "Todo fallo, sea de API o de validación, aterriza aquí con la misma forma. Lo escriben cinco módulos distintos: [8E] y [17E] del Escenario 1 (fallos de la API de IA), [11] del Escenario 1 (dato faltante), y [5] y [7E] del Escenario 2. Tener un único esquema es lo que permite calcular la tasa de errores en el dashboard sin cruzar tablas.",
+  "type": "object",
+  "required": ["fldQnblJ1AkLgDgOS", "fldpJhwJ9RQn2d9TK", "fldCBS5b75LuRSu2m", "fldZbtjTPbFBJV5jR", "fld7zqJB8MRrTFl1E"],
+  "properties": {
+    "fldQnblJ1AkLgDgOS": {
+      "title": "Codigo",
+      "type": "string",
+      "pattern": "^ERR-[0-9]{8}-[0-9]{6}$",
+      "examples": ["ERR-20260924-193012"]
+    },
+    "fldpJhwJ9RQn2d9TK": { "title": "Fecha", "type": "string", "format": "date-time" },
+    "fldCBS5b75LuRSu2m": {
+      "title": "Escenario",
+      "type": "string",
+      "enum": ["Escenario 1 Ingesta", "Escenario 2 Envio"]
+    },
+    "fldZbtjTPbFBJV5jR": {
+      "title": "Modulo",
+      "type": "string",
+      "description": "Nombre del nodo que falló, con el mismo numeral que aparece en el lienzo de Make. Es lo que hace que un error del log se pueda ubicar en el mapa de arquitectura sin adivinar.",
+      "examples": ["[8] IA Extraer y clasificar", "[10] Router ruta A", "[17] IA Redactar propuesta", "[4] Router ruta A", "[7] Gmail Enviar propuesta"]
+    },
+    "fld7zqJB8MRrTFl1E": {
+      "title": "Tipo de error",
+      "type": "string",
+      "enum": ["Fallo de API de IA", "Dato faltante", "Propuesta vacia", "Fallo de API de Gmail"],
+      "description": "Categoría cerrada. El dashboard agrupa por este campo."
+    },
+    "fldTHuHIKHsXUaGPU": {
+      "title": "Detalle",
+      "type": "string",
+      "description": "Mensaje técnico + contexto mínimo. Este campo queda OCULTO en la vista pública del dashboard porque puede contener el correo del remitente."
+    },
+    "fldx4zH5G04eTF4U5": {
+      "title": "Resuelto",
+      "type": "string",
+      "enum": ["Si", "No"],
+      "description": "Siempre entra en 'No'. Lo cierra una persona."
+    }
+  },
+  "x-directiva-por-tipo": {
+    "Fallo de API de IA en [8]": "Break con retry: 3 intentos cada 15 s. La ejecución queda en Incomplete executions y Make la reintenta sola. Si no se recupera, no se escribe ninguna solicitud a medias.",
+    "Fallo de API de IA en [17]": "Resume. El flujo NO se detiene: la solicitud igual se crea en Airtable con el aviso 'PROPUESTA NO GENERADA' y Slack pide revisión manual. Preferimos una propuesta vacía y visible antes que perder la solicitud de una familia.",
+    "Dato faltante en [11]": "No es un fallo de sistema sino de entrada. No hay retry: se registra, se avisa por Slack y el bundle muere ahí.",
+    "Fallo de API de Gmail en [7]": "Break con retry. El Estado se queda en 'Aprobado', así que cuando Gmail vuelva, el trigger lo toma de nuevo. Nunca se marca 'Enviado' un correo que no salió.",
+    "Propuesta vacia en [5]": "Check de seguridad previo al envío. No hay retry porque reintentar no arregla un campo vacío: hace falta una persona."
+  }
+}

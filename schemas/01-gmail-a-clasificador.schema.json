@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cuidda.info/schemas/01-gmail-a-clasificador.schema.json",
+  "title": "Correo entrante → módulo [8] IA · Extraer y clasificar",
+  "description": "Payload que el trigger [1] Gmail · Nueva solicitud entrante entrega al clasificador del Escenario 1. Solo se listan los campos que el flujo realmente consume; el resto de la salida de Gmail se descarta por minimización de datos.",
+  "type": "object",
+  "required": ["subject", "fromEmail", "fullTextBody", "threadId", "headers"],
+  "properties": {
+    "subject": {
+      "type": "string",
+      "description": "Asunto del correo. Debe contener 'solicitud de cuidado' para que el filtro del trigger lo capture.",
+      "examples": ["Solicitud de cuidado para mi mamá en Huanchaco"]
+    },
+    "fromName": {
+      "type": "string",
+      "description": "Nombre del remitente. Se usa como respaldo si la IA no encuentra el nombre en el cuerpo."
+    },
+    "fromEmail": {
+      "type": "string",
+      "format": "email",
+      "description": "Correo del remitente. Es el fallback del campo email cuando el cuerpo no trae uno."
+    },
+    "fullTextBody": {
+      "type": "string",
+      "description": "Cuerpo en texto plano. Es la única fuente de la que la IA puede extraer distrito, turno y teléfono."
+    },
+    "threadId": {
+      "type": "string",
+      "description": "Identificador de hilo de Gmail. Se guarda en Solicitudes.Hilo Gmail para trazabilidad.",
+      "examples": ["1a0bd51cc6dfca8d"]
+    },
+    "headers": {
+      "type": "object",
+      "description": "Cabeceras RFC 2822 del mensaje.",
+      "properties": {
+        "message-id": {
+          "type": "string",
+          "description": "Se guarda en Solicitudes.Message ID Gmail y el Escenario 2 lo reusa como In-Reply-To y References para que la propuesta caiga en el mismo hilo."
+        }
+      }
+    }
+  },
+  "x-campos-descartados": [
+    "htmlBody", "cc", "bcc", "labelIds", "sizeEstimate", "historyId", "hasAttachment",
+    "sysFolders", "categoryFolders", "userLabelFolders", "snippet", "internalDate", "to"
+  ],
+  "x-nota-de-minimizacion": "El flujo nunca copia el HTML del correo ni la lista de destinatarios. A Airtable solo llega el texto plano, que es lo mínimo necesario para que un humano pueda auditar la decisión de la IA."
+}

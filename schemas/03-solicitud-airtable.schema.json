@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cuidda.info/schemas/03-solicitud-airtable.schema.json",
+  "title": "Registro escrito en Airtable · tabla Solicitudes (módulos [13] y [18])",
+  "description": "Estructura del record que el Escenario 1 crea en la tabla Solicitudes (tbloHJ3bW32Tk892I). Make escribe por ID de campo, no por nombre, para que un rename en Airtable no rompa el flujo. La clave del objeto es el fieldId; el título de cada propiedad es el nombre visible.",
+  "type": "object",
+  "properties": {
+    "fldswL3l4BgSrPlPr": {
+      "title": "Codigo",
+      "type": "string",
+      "pattern": "^SOL-[0-9]{8}-[0-9]{6}$",
+      "description": "SOL-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}. Clave de negocio legible, independiente del record id de Airtable."
+    },
+    "fldCp9Y1gwRhSCl0L": { "title": "Fecha entrada", "type": "string", "format": "date-time" },
+    "fld8OQzLKX51uSjDw": { "title": "Familia", "type": "string" },
+    "fld3Ib1fiEU0kn2qy": { "title": "Email", "type": "string", "format": "email" },
+    "fldpLreceh6uHaCkX": {
+      "title": "Telefono",
+      "type": "string",
+      "pattern": "^\\+[1-9][0-9]{6,14}$",
+      "description": "E.164. Se compone como Configuracion.prefijo_telefono_pais + los dígitos que devolvió la IA. El campo en Airtable es de tipo 'Número de teléfono', no numérico, para que el + no se pierda.",
+      "examples": ["+51987654321"]
+    },
+    "fld9hvQViF3qiMSJ6": {
+      "title": "Mensaje original",
+      "type": "string",
+      "description": "Texto plano del correo. Se guarda para que un humano pueda auditar la decisión de la IA."
+    },
+    "fldtI5sKssoSkCH7G": {
+      "title": "Distrito",
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 1,
+      "description": "CAMPO VINCULADO a la tabla Cobertura. Make lo manda como array de un elemento con typecast activo, así Airtable resuelve el nombre al record correspondiente. De aquí cuelgan los lookups Cubierto y Recargo movilidad soles."
+    },
+    "fldsv8LA5ssOnWSS6": {
+      "title": "Turno",
+      "type": "array",
+      "items": { "type": "string" },
+      "maxItems": 1,
+      "description": "CAMPO VINCULADO a Catalogo de turnos. De aquí cuelgan los lookups Horario y Tarifa soles."
+    },
+    "fldteTrPCuGze1xNH": { "title": "Prioridad", "type": "string", "enum": ["Alta", "Media", "Baja"] },
+    "fldrCsA2FhCd8UqgW": { "title": "Resumen IA", "type": "string" },
+    "fldGySVUs3LBUIhKN": {
+      "title": "Propuesta generada",
+      "type": "string",
+      "description": "Cuerpo del correo redactado por Claude Haiku 4.5. Si la IA falló, el handler Resume deja aquí el aviso 'PROPUESTA NO GENERADA'."
+    },
+    "fld0ycmZJDZNUimVa": { "title": "Monto estimado", "type": "integer", "minimum": 0 },
+    "fldDl9tqsFnzCRq2C": {
+      "title": "Modelo usado",
+      "type": "string",
+      "enum": ["gpt-5-nano", "claude-haiku-4.5"],
+      "description": "Se escribe leyendo Configuracion, no hardcodeado. Es lo que permite auditar el costo por solicitud."
+    },
+    "fldBo9QKnm6IgDr5e": {
+      "title": "Estado",
+      "type": "string",
+      "enum": ["Pendiente", "Procesado por IA", "Aprobado", "Enviado", "Rechazado", "Error"],
+      "description": "Máquina de estados del ciclo de vida. El Escenario 2 solo mira 'Aprobado' y lo deja en 'Enviado'."
+    },
+    "fldzxJRYLkmpV4rX9": {
+      "title": "Aprobado por Humano",
+      "type": "boolean",
+      "description": "PUNTO DE VALIDACIÓN HUMANA. El Escenario 1 siempre lo escribe en false. Solo una persona puede marcarlo."
+    },
+    "fld41DhB7GzPaeEtU": { "title": "Motivo de rechazo", "type": "string" },
+    "fldZWRSRiUlC6PR20": { "title": "Fecha envio", "type": "string", "format": "date-time" },
+    "fldas42PaE0GpjyaO": { "title": "Hilo Gmail", "type": "string" },
+    "fldJ9LamByno7XK7M": { "title": "Message ID Gmail", "type": "string" },
+    "fld97SpvMvr2VXbII": {
+      "title": "Slack ts",
+      "type": "string",
+      "description": "Timestamp del mensaje de aprobación en Slack. El módulo [20] lo escribe después de publicar, y el Escenario 2 lo usa como thread_ts para responder en el mismo hilo.",
+      "examples": ["1758331234.001500"]
+    }
+  },
+  "x-variantes": {
+    "[18] ruta C · solicitud valida": "Escribe todos los campos, incluidos Distrito, Turno, Propuesta generada y Monto estimado. Estado = 'Procesado por IA'.",
+    "[13] ruta B · fuera de cobertura": "NO escribe Distrito ni Turno (el distrito no existe como record válido en Cobertura), no genera propuesta y no gasta el modelo caro. Estado = 'Rechazado' y Motivo de rechazo = 'Fuera de cobertura: <distrito>'."
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cuidda.info/schemas/02-clasificacion-ia.schema.json",
+  "title": "Contrato de salida del clasificador → módulo [9] Parsear clasificacion → [10] Router",
+  "description": "Es el contrato más importante del ecosistema: el módulo [8] (gpt-5-nano) debe devolver EXACTAMENTE este objeto, sin texto adicional y sin bloques de código. El módulo [9] lo parsea y el Router [10] decide la ruta leyendo únicamente 'datos_completos' y 'distrito_cubierto'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "familia", "email", "telefono", "distrito", "turno", "prioridad",
+    "resumen", "monto_estimado", "datos_completos", "distrito_cubierto", "faltantes"
+  ],
+  "properties": {
+    "familia": {
+      "type": "string",
+      "description": "Nombre de quien escribe. Cadena vacía si no aparece en el correo."
+    },
+    "email": {
+      "type": "string",
+      "description": "Correo de contacto. Si el cuerpo no trae uno, se usa el del remitente."
+    },
+    "telefono": {
+      "type": "string",
+      "pattern": "^[0-9]*$",
+      "description": "SOLO dígitos, sin prefijo de país, sin espacios ni guiones. Make le antepone el prefijo que vive en Configuracion.prefijo_telefono_pais para escribirlo en E.164.",
+      "examples": ["987654321", ""]
+    },
+    "distrito": {
+      "type": "string",
+      "description": "Debe coincidir literalmente con un valor de la tabla Cobertura, o ser cadena vacía. La IA nunca inventa distritos.",
+      "examples": ["Huanchaco", "Trujillo Centro", ""]
+    },
+    "turno": {
+      "type": "string",
+      "description": "Debe coincidir literalmente con un valor de la tabla Catalogo de turnos, o ser cadena vacía.",
+      "enum": ["Manana", "Tarde", "Dia completo", "Noche", "24 horas", ""]
+    },
+    "prioridad": {
+      "type": "string",
+      "enum": ["Alta", "Media", "Baja"],
+      "description": "Alta solo si hay riesgo declarado para el paciente, alta hospitalaria en las próximas 48 h, o el cuidado empieza en menos de 24 h."
+    },
+    "resumen": {
+      "type": "string",
+      "maxLength": 240,
+      "description": "Máximo 30 palabras, en español, sin inventar nada."
+    },
+    "monto_estimado": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Tarifa del turno + recargo de movilidad del distrito, en soles. 0 si falta el turno o el distrito.",
+      "examples": [190, 90, 175, 0]
+    },
+    "datos_completos": {
+      "type": "string",
+      "enum": ["si", "no"],
+      "description": "BANDERA DE RUTEO. 'si' únicamente cuando email, distrito y turno tienen valor."
+    },
+    "distrito_cubierto": {
+      "type": "string",
+      "enum": ["si", "no"],
+      "description": "BANDERA DE RUTEO. 'si' únicamente cuando el distrito aparece en Cobertura con Cubierto = Si."
+    },
+    "faltantes": {
+      "type": "string",
+      "description": "Lista en texto de los datos que faltaron. Cadena vacía si no faltó ninguno. Es lo que se escribe en Log de errores en la ruta A."
+    }
+  },
+  "x-tabla-de-ruteo": {
+    "A · Dato faltante": "datos_completos = 'no'",
+    "B · Fuera de cobertura": "datos_completos = 'si' Y distrito_cubierto = 'no'",
+    "C · Solicitud valida": "datos_completos = 'si' Y distrito_cubierto = 'si'"
+  },
+  "x-nota-de-exclusividad": "Las tres condiciones son mutuamente excluyentes y cubren todo el espacio de valores posibles: ningún bundle puede caer en dos rutas ni quedarse sin ruta. Todas comparan texto contra texto con el operador text:equal, nunca con notequal.",
+  "x-ejemplo-valido": {
+    "familia": "Rosa Mendoza",
+    "email": "rosa.mendoza@example.com",
+    "telefono": "987654321",
+    "distrito": "Huanchaco",
+    "turno": "Noche",
+    "prioridad": "Alta",
+    "resumen": "Señora de 78 años con fractura de cadera, alta hospitalaria en 48 horas, necesita apoyo nocturno.",
+    "monto_estimado": 190,
+    "datos_completos": "si",
+    "distrito_cubierto": "si",
+    "faltantes": ""
+  },
+  "x-ejemplo-camino-infeliz": {
+    "familia": "Carlos Ríos",
+    "email": "carlos.rios@example.com",
+    "telefono": "",
+    "distrito": "",
+    "turno": "",
+    "prioridad": "Media",
+    "resumen": "Consulta general sobre disponibilidad de personal de cuidado sin indicar zona ni horario.",
+    "monto_estimado": 0,
+    "datos_completos": "no",
+    "distrito_cubierto": "no",
+    "faltantes": "distrito, turno, telefono"
+  }
+}
