@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuidda · Panel de control</title>
+<meta name="description" content="Panel de control del ecosistema de automatización de Cuidda: pipeline de solicitudes, cola de aprobación humana y tasa de errores, en vivo desde Airtable.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#022454; --teal:#2FA5B8; --soft:#E8F5F7; --amber:#D98A1F;
+  --code:#F4F7FA; --ink:#1B2B3F; --muted:#5D7089; --line:#D7E3EA;
+  --ok:#2E8B6F; --bad:#C0543F;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Comfortaa',system-ui,sans-serif;
+  color:var(--ink); background:#fff; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-family:'Plus Jakarta Sans',system-ui,sans-serif;line-height:1.25;margin:0}
+a{color:var(--teal)}
+.wrap{max-width:1140px;margin:0 auto;padding:0 24px}
+
+header.top{background:var(--navy);color:#fff;padding:38px 0 34px}
+.brand{display:block;margin-bottom:24px}
+.brand img{height:38px;width:auto;display:block}
+header.top h1{font-size:clamp(26px,4.4vw,40px);font-weight:800;max-width:19ch}
+header.top p{color:#B9CCDE;margin:14px 0 0;max-width:62ch;font-size:15px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.chip{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
+  border-radius:999px;padding:6px 14px;font-size:12.5px;color:#DCE9F2}
+
+section{padding:46px 0;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.eyebrow{font-family:'Plus Jakarta Sans';font-weight:700;font-size:11.5px;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--teal);margin-bottom:9px}
+section h2{font-size:clamp(20px,2.7vw,27px);font-weight:800;color:var(--navy)}
+section > .wrap > p{color:var(--muted);max-width:70ch;margin:13px 0 0}
+
+.grid{display:grid;gap:16px;margin-top:26px}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:860px){.g3,.g2{grid-template-columns:1fr}}
+
+.card{border:1px solid var(--line);border-radius:14px;padding:20px 22px;background:#fff}
+.card h3{font-size:15.5px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.card .kpi-def{font-size:13.5px;color:var(--muted)}
+.card .formula{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;
+  background:var(--code);border-radius:8px;padding:9px 11px;margin-top:12px;color:var(--navy);
+  word-break:break-word}
+.card.accent{background:var(--soft);border-color:#C4E2E8}
+
+.where{display:inline-flex;align-items:center;gap:7px;margin-top:12px;font-size:12.5px;color:var(--navy);font-weight:600}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none}
+
+.panel{margin-top:22px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff}
+.panel-head{display:flex;flex-wrap:wrap;gap:10px;align-items:baseline;justify-content:space-between;
+  padding:15px 20px;background:var(--soft);border-bottom:1px solid #C4E2E8}
+.panel-head h3{font-size:15.5px;font-weight:800;color:var(--navy)}
+.panel-head span{font-size:12.5px;color:var(--muted)}
+.panel iframe{display:block;width:100%;height:520px;border:0;background:#fff}
+@media(max-width:700px){.panel iframe{height:430px}}
+
+table{width:100%;border-collapse:collapse;margin-top:22px;font-size:14px}
+th,td{text-align:left;padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:'Plus Jakarta Sans';font-weight:700;color:var(--navy);font-size:12.5px;
+  text-transform:uppercase;letter-spacing:.7px}
+td code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:var(--code);
+  padding:2px 6px;border-radius:5px}
+
+.note{margin-top:24px;border-left:3px solid var(--amber);background:#FDF6EA;
+  padding:15px 18px;border-radius:0 10px 10px 0;font-size:14px;color:#6B4C18}
+.note b{color:#4A340D}
+
+footer{background:var(--navy);color:#B9CCDE;padding:34px 0;font-size:13px}
+footer a{color:#8FD3DE;text-decoration:none}
+footer a:hover{text-decoration:underline}
+.foot-grid{display:flex;flex-wrap:wrap;gap:26px;justify-content:space-between;align-items:flex-start}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><img src="logo-cuidda-blanco.png" alt="Cuidda"></div>
+    <h1>Panel de control del ecosistema</h1>
+    <p>Cuidda conecta familias con personal de salud verificado a domicilio en Trujillo, Perú.
+       Este panel muestra, en vivo, qué está haciendo el sistema de automatización que procesa
+       las solicitudes de cuidado: dónde está cada una, cuáles esperan una decisión humana y
+       qué se rompió.</p>
+    <div class="chips">
+      <span class="chip">Make · 2 escenarios</span>
+      <span class="chip">Airtable · 6 tablas relacionadas</span>
+      <span class="chip">gpt-5-nano + Claude Haiku 4.5</span>
+      <span class="chip">Gmail + Slack</span>
+      <span class="chip">Validación humana obligatoria</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Cómo se leen los números</div>
+    <h2>Los cuatro indicadores del panel</h2>
+    <p>Cada indicador se lee directamente de las vistas embebidas más abajo. No hay copias ni
+       cachés: lo que se ve acá es la misma fila que el flujo acaba de escribir en Airtable.</p>
+
+    <div class="grid g2">
+      <div class="card">
+        <h3>Solicitudes por estado</h3>
+        <div class="kpi-def">Cuántas solicitudes hay en cada etapa del ciclo de vida.
+          Es el pulso del pipeline: si «Procesado por IA» crece, hay trabajo humano pendiente.</div>
+        <div class="formula">count(Solicitudes) agrupado por Estado</div>
+        <div class="where"><span class="dot"></span>Panel 1 · encabezado de cada grupo</div>
+      </div>
+
+      <div class="card">
+        <h3>Cola de aprobación humana</h3>
+        <div class="kpi-def">Solicitudes con propuesta generada esperando que una persona
+          decida. Nada sale al cliente hasta que alguien marca la casilla.</div>
+        <div class="formula">count(Solicitudes) donde Estado = "Procesado por IA"</div>
+        <div class="where"><span class="dot"></span>Panel 2 · contador inferior</div>
+      </div>
+
+      <div class="card">
+        <h3>Monto en juego</h3>
+        <div class="kpi-def">Suma del monto estimado de las solicitudes activas, en soles.
+          Es lo que se pierde si la cola de aprobación se queda dormida.</div>
+        <div class="formula">sum(Monto estimado)</div>
+        <div class="where"><span class="dot"></span>Panel 1 · barra de resumen</div>
+      </div>
+
+      <div class="card accent">
+        <h3>Tasa de errores</h3>
+        <div class="kpi-def">Qué porcentaje de las solicitudes que entraron terminó registrando
+          un error. Se cuentan tanto los fallos de API como los correos incompletos, porque
+          para el operador ambos son trabajo que alguien tiene que mirar.</div>
+        <div class="formula">tasa = count(Log de errores) ÷ (count(Solicitudes) + count(Log de errores · "Dato faltante")) × 100</div>
+        <div class="where"><span class="dot"></span>Panel 3 · contador inferior ÷ Panel 1</div>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>Por qué el denominador es raro.</b> Una solicitud con datos faltantes nunca llega a
+      crear una fila en <code>Solicitudes</code>: muere en la ruta A y solo deja rastro en
+      <code>Log de errores</code>. Si se dividiera por las solicitudes creadas, esos casos
+      desaparecerían del denominador y la tasa de error quedaría artificialmente baja. Sumarlos
+      es lo que hace que el número signifique «de cada 100 correos que entraron, cuántos
+      terminaron mal».
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Panel 1</div>
+    <h2>Pipeline de solicitudes</h2>
+    <p>Todas las solicitudes agrupadas por estado, con el distrito, el turno, la prioridad que
+       asignó la IA, el monto estimado y qué modelo la procesó. Sin un solo dato personal:
+       nombre, correo, teléfono, mensaje original y propuesta están ocultos en esta vista.</p>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Airtable · Solicitudes · Panel · Pipeline de solicitudes</h3>
+        <span>agrupado por Estado · 9 campos ocultos por minimización de datos</span>
+      </div>
+      <iframe src="https://airtable.com/embed/appxzAU6Buul0hoGw/shrpJFMWZ6SJe51ZU"
+              title="Pipeline de solicitudes" loading="lazy"></iframe>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Panel 2</div>
+    <h2>Cola de aprobación humana</h2>
+    <p>El punto de validación humana del ecosistema. Todo lo que está en esta lista tiene una
+       propuesta escrita por la IA y está esperando que una persona marque
+       <code>Aprobado por Humano</code> y ponga el estado en <code>Aprobado</code>. Recién ahí
+       el Escenario 2 envía el correo a la familia.</p>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Airtable · Solicitudes · Panel · Cola de aprobacion humana</h3>
+        <span>filtrado por Estado = "Procesado por IA"</span>
+      </div>
+      <iframe src="https://airtable.com/embed/appxzAU6Buul0hoGw/shrMEr61iDjfBKKat"
+              title="Cola de aprobación humana" loading="lazy"></iframe>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Panel 3</div>
+    <h2>Errores por tipo</h2>
+    <p>Todo lo que se rompió, agrupado por categoría y con el nodo exacto que falló. El campo
+       <code>Detalle</code> está oculto a propósito: puede contener el correo del remitente y
+       este panel es público.</p>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Airtable · Log de errores · Panel · Errores por tipo</h3>
+        <span>agrupado por Tipo de error · campo Detalle oculto</span>
+      </div>
+      <iframe src="https://airtable.com/embed/appxzAU6Buul0hoGw/shrQMSuA6fTTzrltH"
+              title="Errores por tipo" loading="lazy"></iframe>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Tipo de error</th><th>Qué lo produce</th><th>Directiva</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Fallo de API de IA</td>
+          <td>El clasificador <code>[8]</code> o el redactor <code>[17]</code> no respondieron</td>
+          <td><code>Break</code> con 3 reintentos en <code>[8]</code>, <code>Resume</code> en <code>[17]</code></td>
+        </tr>
+        <tr>
+          <td>Dato faltante</td>
+          <td>El correo no traía distrito, turno o correo de contacto</td>
+          <td>Sin reintento: se registra y se avisa por Slack</td>
+        </tr>
+        <tr>
+          <td>Fallo de API de Gmail</td>
+          <td>El envío de la propuesta aprobada falló</td>
+          <td><code>Break</code> con reintento · el estado queda en «Aprobado» y vuelve a entrar</td>
+        </tr>
+        <tr>
+          <td>Propuesta vacía</td>
+          <td>Alguien aprobó una solicitud sin propuesta escrita</td>
+          <td>Check de seguridad: no se envía nada y se avisa en el hilo de Slack</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="eyebrow">Cómo funciona por dentro</div>
+    <h2>Dos escenarios, una frontera humana</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Escenario 1 · Ingesta y calificación IA</h3>
+        <div class="kpi-def">Un correo entra por Gmail. El sistema lee la configuración, la
+          cobertura y el catálogo de turnos desde Airtable, clasifica con gpt-5-nano y enruta:
+          dato faltante, fuera de cobertura, o solicitud válida. Las válidas pasan por la base
+          de conocimiento y Claude Haiku 4.5 escribe la propuesta. Termina pidiendo aprobación
+          en Slack.</div>
+        <div class="formula">25 módulos · 3 rutas · 2 handlers de error</div>
+      </div>
+      <div class="card">
+        <h3>Escenario 2 · Envío tras aprobación humana</h3>
+        <div class="kpi-def">Se dispara solo cuando una persona marcó la casilla y cambió el
+          estado. Verifica que la propuesta no esté vacía, envía el correo en el mismo hilo de
+          Gmail que abrió la familia, cierra el ciclo poniendo «Enviado» y confirma en el hilo
+          de Slack.</div>
+        <div class="formula">13 módulos · 2 rutas · 2 handlers de error</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      <div class="brand" style="margin-bottom:10px"><img src="logo-cuidda-blanco.png" alt="Cuidda" style="height:30px"></div>
+      <div>Panel de control · Entrega final del curso de automatización</div>
+    </div>
+    <div>
+      Datos en vivo desde Airtable · vistas compartidas sin datos personales<br>
+      Orquestado con Make · <span id="anio"></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+document.getElementById('anio').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>
