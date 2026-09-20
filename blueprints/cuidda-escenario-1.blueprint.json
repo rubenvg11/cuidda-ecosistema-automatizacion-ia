@@ -1,0 +1,679 @@
+{
+  "name": "Cuidda · 1 · Ingesta y calificacion IA",
+  "flow": [
+    {
+      "id": 1,
+      "module": "google-email:triggerWatchNewEmails",
+      "version": 4,
+      "parameters": {
+        "__IMTCONN__": 10637014,
+        "filterType": "gmailSearch",
+        "format": "full",
+        "q": "is:unread subject:(solicitud de cuidado)",
+        "markSeen": true,
+        "limit": 1
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "[1] Gmail · Nueva solicitud entrante"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "airtable:ActionSearchRecords",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 10636792
+      },
+      "mapper": {
+        "base": "appxzAU6Buul0hoGw",
+        "useColumnId": false,
+        "table": "tblcfTQrNzGIs110O",
+        "formula": "",
+        "maxRecords": "20"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "[2] Airtable · Leer configuracion del sistema"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicAggregator",
+      "version": 1,
+      "parameters": {
+        "feeder": 2
+      },
+      "mapper": {
+        "Clave": "{{2.Clave}}",
+        "Valor": "{{2.Valor}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0,
+          "name": "[3] Tools · Compactar configuracion"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "airtable:ActionSearchRecords",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 10636792
+      },
+      "mapper": {
+        "base": "appxzAU6Buul0hoGw",
+        "useColumnId": false,
+        "table": "tblU7qF4h7IVgwGjQ",
+        "formula": "",
+        "maxRecords": "20"
+      },
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0,
+          "name": "[4] Airtable · Leer cobertura vigente"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "module": "util:TextAggregator",
+      "version": 1,
+      "parameters": {
+        "rowSeparator": "\n",
+        "feeder": 4
+      },
+      "mapper": {
+        "value": "- {{4.Distrito}} | Cubierto={{4.Cubierto}} | Recargo movilidad={{4.`Recargo movilidad soles`}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1200,
+          "y": 0,
+          "name": "[5] Tools · Compactar cobertura"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "module": "airtable:ActionSearchRecords",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 10636792
+      },
+      "mapper": {
+        "base": "appxzAU6Buul0hoGw",
+        "useColumnId": false,
+        "table": "tblj7zkYXiS7pC3ay",
+        "formula": "",
+        "maxRecords": "20"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1500,
+          "y": 0,
+          "name": "[6] Airtable · Leer catalogo de turnos"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "module": "util:TextAggregator",
+      "version": 1,
+      "parameters": {
+        "rowSeparator": "\n",
+        "feeder": 6
+      },
+      "mapper": {
+        "value": "- {{6.Turno}} | Horario={{6.Horario}} | Tarifa={{6.`Tarifa soles`}} | {{6.`Notas operativas`}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 1800,
+          "y": 0,
+          "name": "[7] Tools · Compactar catalogo de turnos"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "module": "ai-tools:Ask",
+      "version": 2,
+      "parameters": {
+        "makeConnectionId": 10636489,
+        "model": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_id_clasificacion\"); 1) }}"
+      },
+      "mapper": {
+        "input": "Sos el sistema de admision de Cuidda, una plataforma que conecta familias con personal de salud verificado a domicilio en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }}, Peru.\nTu tarea es leer un correo entrante de una familia y devolver SOLO un objeto JSON valido, sin texto adicional y sin bloques de codigo.\n\nCLAVES EXACTAS QUE DEBES DEVOLVER:\nfamilia: nombre de la persona que escribe, string vacio si no aparece.\nemail: correo de contacto. Si el cuerpo no trae uno, usa el del remitente.\ntelefono: SOLO digitos, sin prefijo de pais, sin espacios ni guiones. String vacio si no aparece.\ndistrito: el distrito escrito tal cual aparece en la lista de COBERTURA. String vacio si no se menciona.\nturno: uno de los nombres exactos de la lista de CATALOGO DE TURNOS. String vacio si no se puede deducir.\nprioridad: Alta, Media o Baja. Alta solo si hay riesgo declarado para el paciente, una alta hospitalaria en las proximas 48 horas o el cuidado empieza en menos de 24 horas.\nresumen: maximo 30 palabras, en espanol, sin inventar nada.\nmonto_estimado: numero entero en soles. Tarifa del turno elegido mas el recargo de movilidad del distrito. 0 si falta el turno o el distrito.\ndatos_completos: si o no. Es 'si' unicamente cuando email, distrito y turno tienen valor.\ndistrito_cubierto: si o no. Es 'si' unicamente cuando el distrito aparece en COBERTURA con Cubierto=Si.\nfaltantes: lista en texto de que datos faltaron, string vacio si no falto ninguno.\n\nREGLAS DURAS: no inventes telefonos, distritos, turnos ni montos. Si un dato no esta en el correo, devolvelo vacio y marca datos_completos en no. Si el distrito no esta en COBERTURA, distrito_cubierto es no.\n\nCOBERTURA VIGENTE (fuente: tabla Cobertura):\n{{5.text}}\n\nCATALOGO DE TURNOS (fuente: tabla Catalogo de turnos):\n{{7.text}}\n\nCORREO A PROCESAR\nAsunto: {{1.subject}}\nRemitente: {{1.fromName}} <{{1.fromEmail}}>\nCuerpo:\n{{1.fullTextBody}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2100,
+          "y": 0,
+          "name": "[8] IA · Extraer y clasificar solicitud"
+        }
+      },
+      "onerror": [
+        {
+          "id": 101,
+          "module": "airtable:ActionCreateRecord",
+          "version": 3,
+          "parameters": {
+            "__IMTCONN__": 10636792
+          },
+          "mapper": {
+            "base": "appxzAU6Buul0hoGw",
+            "typecast": true,
+            "useColumnId": false,
+            "table": "tblY66MlpoRAAdtfc",
+            "record": {
+              "fldQnblJ1AkLgDgOS": "ERR-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+              "fldpJhwJ9RQn2d9TK": "{{now}}",
+              "fldCBS5b75LuRSu2m": "Escenario 1 Ingesta",
+              "fldZbtjTPbFBJV5jR": "[8] IA Extraer y clasificar",
+              "fld7zqJB8MRrTFl1E": "Fallo de API de IA",
+              "fldTHuHIKHsXUaGPU": "{{8.error.message}} | Asunto: {{1.subject}} | Remitente: {{1.fromEmail}}",
+              "fldx4zH5G04eTF4U5": "No"
+            }
+          },
+          "metadata": {
+            "designer": {
+              "x": 2100,
+              "y": 300,
+              "name": "[8E] Airtable · Registrar fallo de la IA"
+            }
+          }
+        },
+        {
+          "id": 102,
+          "module": "slack:CreateMessage",
+          "version": 4,
+          "parameters": {
+            "__IMTCONN__": 11203706
+          },
+          "mapper": {
+            "channelWType": "manualy",
+            "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+            "text": ":warning: *Cuidda · fallo de la API de IA*\nEl clasificador no respondio y la solicitud quedo sin procesar.\n*De:* {{1.fromEmail}}\n*Asunto:* {{1.subject}}\n*Error:* {{8.error.message}}\n_Queda registrada en la tabla Log de errores._",
+            "parse": false,
+            "mrkdwn": true
+          },
+          "metadata": {
+            "designer": {
+              "x": 2400,
+              "y": 300,
+              "name": "[8E] Slack · Alertar fallo de la IA"
+            }
+          }
+        },
+        {
+          "id": 103,
+          "module": "builtin:Break",
+          "version": 1,
+          "mapper": {
+            "retry": true,
+            "interval": 15,
+            "count": 3
+          },
+          "metadata": {
+            "designer": {
+              "x": 2700,
+              "y": 300,
+              "name": "[8E] Break · Detener con reintento"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "module": "json:ParseJSON",
+      "version": 1,
+      "parameters": {
+        "type": ""
+      },
+      "mapper": {
+        "json": "{{8.answer}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 2400,
+          "y": 0,
+          "name": "[9] Parsear clasificacion"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 2700,
+          "y": 0,
+          "name": "[10] Router · Rutas de validacion"
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 11,
+              "module": "airtable:ActionCreateRecord",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "typecast": true,
+                "useColumnId": false,
+                "table": "tblY66MlpoRAAdtfc",
+                "record": {
+                  "fldQnblJ1AkLgDgOS": "ERR-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+                  "fldpJhwJ9RQn2d9TK": "{{now}}",
+                  "fldCBS5b75LuRSu2m": "Escenario 1 Ingesta",
+                  "fldZbtjTPbFBJV5jR": "[10] Router ruta A",
+                  "fld7zqJB8MRrTFl1E": "Dato faltante",
+                  "fldTHuHIKHsXUaGPU": "Faltan: {{9.faltantes}} | De: {{1.fromEmail}} | Asunto: {{1.subject}}",
+                  "fldx4zH5G04eTF4U5": "No"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": -300,
+                  "name": "[11] Airtable · Registrar error de validacion"
+                }
+              },
+              "filter": {
+                "name": "A · Dato faltante",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{9.datos_completos}}",
+                      "b": "no",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 12,
+              "module": "slack:CreateMessage",
+              "version": 4,
+              "parameters": {
+                "__IMTCONN__": 11203706
+              },
+              "mapper": {
+                "channelWType": "manualy",
+                "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+                "text": ":mag: *Cuidda · solicitud incompleta*\n*De:* {{1.fromName}} <{{1.fromEmail}}>\n*Asunto:* {{1.subject}}\n*Faltan:* {{9.faltantes}}\n_No se genero propuesta. Registrada en Log de errores._",
+                "parse": false,
+                "mrkdwn": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": -300,
+                  "name": "[12] Slack · Alertar dato faltante"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 13,
+              "module": "airtable:ActionCreateRecord",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "typecast": true,
+                "useColumnId": false,
+                "table": "tbloHJ3bW32Tk892I",
+                "record": {
+                  "fldswL3l4BgSrPlPr": "SOL-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+                  "fldCp9Y1gwRhSCl0L": "{{now}}",
+                  "fld8OQzLKX51uSjDw": "{{9.familia}}",
+                  "fld3Ib1fiEU0kn2qy": "{{9.email}}",
+                  "fldpLreceh6uHaCkX": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"prefijo_telefono_pais\"); 1) }}{{9.telefono}}",
+                  "fld9hvQViF3qiMSJ6": "{{1.fullTextBody}}",
+                  "fldteTrPCuGze1xNH": "{{9.prioridad}}",
+                  "fldrCsA2FhCd8UqgW": "{{9.resumen}}",
+                  "fldBo9QKnm6IgDr5e": "Rechazado",
+                  "fld41DhB7GzPaeEtU": "Fuera de cobertura: {{9.distrito}}",
+                  "fldDl9tqsFnzCRq2C": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_clasificacion\"); 1) }}",
+                  "fldzxJRYLkmpV4rX9": false,
+                  "fldas42PaE0GpjyaO": "{{1.threadId}}",
+                  "fldJ9LamByno7XK7M": "{{1.headers.`message-id`}}"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": 0,
+                  "name": "[13] Airtable · Registrar solicitud fuera de cobertura"
+                }
+              },
+              "filter": {
+                "name": "B · Fuera de cobertura",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{9.datos_completos}}",
+                      "b": "si",
+                      "o": "text:equal"
+                    }
+                  ],
+                  [
+                    {
+                      "a": "{{9.distrito_cubierto}}",
+                      "b": "no",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 14,
+              "module": "google-email:sendAnEmail",
+              "version": 4,
+              "parameters": {
+                "__IMTCONN__": 10637014
+              },
+              "mapper": {
+                "to": [
+                  "{{9.email}}"
+                ],
+                "subject": "Cuidda · todavia no llegamos a {{9.distrito}}",
+                "bodyType": "text",
+                "emailHeaders": [
+                  {
+                    "key": "In-Reply-To",
+                    "value": "{{1.headers.`message-id`}}"
+                  },
+                  {
+                    "key": "References",
+                    "value": "{{1.headers.`message-id`}}"
+                  }
+                ],
+                "content": "Hola {{9.familia}},\n\nGracias por escribirnos. Hoy Cuidda opera en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }} pero todavia no tenemos personal verificado disponible en {{9.distrito}}, y preferimos decirtelo antes que hacerte esperar por algo que no podemos cumplir.\n\nApenas abramos tu zona te avisamos.\n\n{{ get(map(3.array; \"Valor\"; \"Clave\"; \"firma_correo\"); 1) }}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": 0,
+                  "name": "[14] Gmail · Responder fuera de cobertura"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 15,
+              "module": "airtable:ActionSearchRecords",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "useColumnId": false,
+                "table": "tblUNJi1OKLof4xeC",
+                "formula": "{Activo} = \"Si\"",
+                "maxRecords": "20"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3000,
+                  "y": 300,
+                  "name": "[15] Airtable · Leer base de conocimiento"
+                }
+              },
+              "filter": {
+                "name": "C · Solicitud valida",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{9.datos_completos}}",
+                      "b": "si",
+                      "o": "text:equal"
+                    }
+                  ],
+                  [
+                    {
+                      "a": "{{9.distrito_cubierto}}",
+                      "b": "si",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 16,
+              "module": "util:TextAggregator",
+              "version": 1,
+              "parameters": {
+                "rowSeparator": "\n",
+                "feeder": 15
+              },
+              "mapper": {
+                "value": "- {{15.Tema}} ({{15.Categoria}}): {{15.Contenido}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3300,
+                  "y": 300,
+                  "name": "[16] Tools · Compactar contexto RAG"
+                }
+              }
+            },
+            {
+              "id": 17,
+              "module": "ai-tools:Ask",
+              "version": 2,
+              "parameters": {
+                "makeConnectionId": 10636489,
+                "model": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_id_redaccion\"); 1) }}"
+              },
+              "mapper": {
+                "input": "Sos quien le responde a las familias en Cuidda, plataforma de cuidado de salud a domicilio en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }}, Peru. Escribi el correo de propuesta que la familia va a leer.\n\nREGLAS DURAS:\n1) Usa unicamente los datos de la SOLICITUD y los hechos de la BASE DE CONOCIMIENTO. Si un dato no esta ahi, no lo escribas. Nunca inventes precios, porcentajes, cantidad de profesionales ni tiempos de respuesta.\n2) Nunca prometas diagnostico medico, atencion de emergencias ni disponibilidad inmediata garantizada.\n3) Tono cercano y directo, sin lenguaje corporativo vacio. Del otro lado hay alguien preocupado por un familiar.\n4) Estructura: saludo con el nombre, una linea que confirma que entendiste el pedido, el turno propuesto con su horario, el monto estimado en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"moneda\"); 1) }}, una linea sobre como se verifica al personal, una linea sobre el pago, y el cierre.\n5) Deci que la propuesta tiene una vigencia de {{ get(map(3.array; \"Valor\"; \"Clave\"; \"horas_vigencia_propuesta\"); 1) }} horas.\n6) Tope duro de salida: {{ get(map(3.array; \"Valor\"; \"Clave\"; \"max_tokens_propuesta\"); 1) }} tokens, que son unas 200 palabras. Si te estas pasando, corta, no resumas a la mitad. Sin emojis. Firma: {{ get(map(3.array; \"Valor\"; \"Clave\"; \"firma_correo\"); 1) }}\n7) Devolve SOLO el cuerpo del correo, sin asunto y sin comillas.\n\nPensa paso a paso: primero mira que entradas de la base responden a lo que pregunta esta familia, despues escribi el correo apoyandote solo en esas.\n\nSOLICITUD\nFamilia: {{9.familia}}\nDistrito: {{9.distrito}}\nTurno: {{9.turno}}\nMonto estimado: {{9.monto_estimado}}\nResumen: {{9.resumen}}\n\nBASE DE CONOCIMIENTO (entradas atomicas verificadas de Cuidda):\n{{16.text}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3600,
+                  "y": 300,
+                  "name": "[17] IA · Redactar propuesta"
+                }
+              },
+              "onerror": [
+                {
+                  "id": 104,
+                  "module": "airtable:ActionCreateRecord",
+                  "version": 3,
+                  "parameters": {
+                    "__IMTCONN__": 10636792
+                  },
+                  "mapper": {
+                    "base": "appxzAU6Buul0hoGw",
+                    "typecast": true,
+                    "useColumnId": false,
+                    "table": "tblY66MlpoRAAdtfc",
+                    "record": {
+                      "fldQnblJ1AkLgDgOS": "ERR-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+                      "fldpJhwJ9RQn2d9TK": "{{now}}",
+                      "fldCBS5b75LuRSu2m": "Escenario 1 Ingesta",
+                      "fldZbtjTPbFBJV5jR": "[17] IA Redactar propuesta",
+                      "fld7zqJB8MRrTFl1E": "Fallo de API de IA",
+                      "fldTHuHIKHsXUaGPU": "{{17.error.message}} | Familia: {{9.familia}} | Distrito: {{9.distrito}}",
+                      "fldx4zH5G04eTF4U5": "No"
+                    }
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 3600,
+                      "y": 600,
+                      "name": "[17E] Airtable · Registrar fallo de redaccion"
+                    }
+                  }
+                },
+                {
+                  "id": 105,
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "mapper": {
+                    "answer": "PROPUESTA NO GENERADA - la API de IA fallo. Revisar a mano antes de aprobar.",
+                    "AIUsage": {
+                      "inputTokens": "",
+                      "outputTokens": ""
+                    }
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 3900,
+                      "y": 600,
+                      "name": "[17E] Resume · Continuar con aviso"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": 18,
+              "module": "airtable:ActionCreateRecord",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "typecast": true,
+                "useColumnId": false,
+                "table": "tbloHJ3bW32Tk892I",
+                "record": {
+                  "fldswL3l4BgSrPlPr": "SOL-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+                  "fldCp9Y1gwRhSCl0L": "{{now}}",
+                  "fld8OQzLKX51uSjDw": "{{9.familia}}",
+                  "fld3Ib1fiEU0kn2qy": "{{9.email}}",
+                  "fldpLreceh6uHaCkX": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"prefijo_telefono_pais\"); 1) }}{{9.telefono}}",
+                  "fld9hvQViF3qiMSJ6": "{{1.fullTextBody}}",
+                  "fldtI5sKssoSkCH7G": [
+                    "{{9.distrito}}"
+                  ],
+                  "fldsv8LA5ssOnWSS6": [
+                    "{{9.turno}}"
+                  ],
+                  "fldteTrPCuGze1xNH": "{{9.prioridad}}",
+                  "fldrCsA2FhCd8UqgW": "{{9.resumen}}",
+                  "fldGySVUs3LBUIhKN": "{{17.answer}}",
+                  "fld0ycmZJDZNUimVa": "{{9.monto_estimado}}",
+                  "fldDl9tqsFnzCRq2C": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_redaccion\"); 1) }}",
+                  "fldBo9QKnm6IgDr5e": "Procesado por IA",
+                  "fldzxJRYLkmpV4rX9": false,
+                  "fldas42PaE0GpjyaO": "{{1.threadId}}",
+                  "fldJ9LamByno7XK7M": "{{1.headers.`message-id`}}"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 3900,
+                  "y": 300,
+                  "name": "[18] Airtable · Crear solicitud vinculada"
+                }
+              }
+            },
+            {
+              "id": 19,
+              "module": "slack:CreateMessage",
+              "version": 4,
+              "parameters": {
+                "__IMTCONN__": 11203706
+              },
+              "mapper": {
+                "channelWType": "manualy",
+                "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+                "text": ":inbox_tray: *Cuidda · propuesta lista para revisar*\n*Familia:* {{9.familia}}  ·  *Prioridad:* {{9.prioridad}}\n*Distrito:* {{9.distrito}}  ·  *Turno:* {{9.turno}}\n*Monto estimado:* {{9.monto_estimado}} {{ get(map(3.array; \"Valor\"; \"Clave\"; \"moneda\"); 1) }}\n*Codigo:* {{18.`Codigo`}}\n\n```{{17.answer}}```\n\n_Nada sale al cliente hasta que alguien marque *Aprobado por Humano* y ponga el Estado en *Aprobado* en Airtable._",
+                "parse": false,
+                "mrkdwn": true
+              },
+              "metadata": {
+                "designer": {
+                  "x": 4200,
+                  "y": 300,
+                  "name": "[19] Slack · Pedir aprobacion humana"
+                }
+              }
+            },
+            {
+              "id": 20,
+              "module": "airtable:ActionUpdateRecords",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "typecast": true,
+                "useColumnId": false,
+                "table": "tbloHJ3bW32Tk892I",
+                "id": "{{18.id}}",
+                "record": {
+                  "fld97SpvMvr2VXbII": "{{19.ts}}"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 4500,
+                  "y": 300,
+                  "name": "[20] Airtable · Guardar hilo de Slack"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": true,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us2.make.com",
+    "notes": []
+  }
+}

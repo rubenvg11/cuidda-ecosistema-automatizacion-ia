@@ -1,0 +1,367 @@
+{
+  "name": "Cuidda · 2 · Envio tras aprobacion humana",
+  "flow": [
+    {
+      "id": 1,
+      "module": "airtable:TriggerWatchRecords",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 10636792,
+        "base": "appxzAU6Buul0hoGw",
+        "useColumnId": false,
+        "table": "tbloHJ3bW32Tk892I",
+        "config": {
+          "triggerField": "Modificado",
+          "labelField": "Codigo"
+        },
+        "maxRecords": 10,
+        "view": "",
+        "formula": "AND({Aprobado por Humano} = 1, {Estado} = \"Aprobado\")"
+      },
+      "mapper": {},
+      "metadata": {
+        "designer": {
+          "x": 0,
+          "y": 0,
+          "name": "[1] Airtable · Solicitud aprobada por un humano"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "module": "airtable:ActionSearchRecords",
+      "version": 3,
+      "parameters": {
+        "__IMTCONN__": 10636792
+      },
+      "mapper": {
+        "base": "appxzAU6Buul0hoGw",
+        "useColumnId": false,
+        "table": "tblcfTQrNzGIs110O",
+        "formula": "",
+        "maxRecords": "20"
+      },
+      "metadata": {
+        "designer": {
+          "x": 300,
+          "y": 0,
+          "name": "[2] Airtable · Leer configuracion del sistema"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "builtin:BasicAggregator",
+      "version": 1,
+      "parameters": {
+        "feeder": 2
+      },
+      "mapper": {
+        "Clave": "{{2.Clave}}",
+        "Valor": "{{2.Valor}}"
+      },
+      "metadata": {
+        "designer": {
+          "x": 600,
+          "y": 0,
+          "name": "[3] Tools · Compactar configuracion"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicRouter",
+      "version": 1,
+      "mapper": null,
+      "metadata": {
+        "designer": {
+          "x": 900,
+          "y": 0,
+          "name": "[4] Router · Check de seguridad antes de enviar"
+        }
+      },
+      "routes": [
+        {
+          "flow": [
+            {
+              "id": 5,
+              "module": "airtable:ActionCreateRecord",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "typecast": true,
+                "useColumnId": false,
+                "table": "tblY66MlpoRAAdtfc",
+                "record": {
+                  "fldQnblJ1AkLgDgOS": "ERR-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+                  "fldpJhwJ9RQn2d9TK": "{{now}}",
+                  "fldCBS5b75LuRSu2m": "Escenario 2 Envio",
+                  "fldZbtjTPbFBJV5jR": "[4] Router ruta A",
+                  "fld7zqJB8MRrTFl1E": "Propuesta vacia",
+                  "fldTHuHIKHsXUaGPU": "La solicitud {{1.Codigo}} fue aprobada pero no tiene propuesta generada. No se envio nada.",
+                  "fldx4zH5G04eTF4U5": "No"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": -300,
+                  "name": "[5] Airtable · Registrar propuesta vacia"
+                }
+              },
+              "filter": {
+                "name": "A · Propuesta vacia",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{if(length(trim(1.`Propuesta generada`)) = 0; \"vacia\"; \"lista\")}}",
+                      "b": "vacia",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 6,
+              "module": "slack:CreateMessage",
+              "version": 4,
+              "parameters": {
+                "__IMTCONN__": 11203706
+              },
+              "mapper": {
+                "channelWType": "manualy",
+                "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+                "text": ":no_entry: *Cuidda · aprobacion bloqueada*\n*Codigo:* {{1.Codigo}}  ·  *Familia:* {{1.Familia}}\nLa solicitud esta aprobada pero el campo *Propuesta generada* esta vacio, asi que el correo NO salio.\n_Revisar a mano y volver a marcar el Estado en Aprobado._",
+                "parse": false,
+                "mrkdwn": true,
+                "thread_ts": "{{1.`Slack ts`}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": -300,
+                  "name": "[6] Slack · Alertar propuesta vacia"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "flow": [
+            {
+              "id": 7,
+              "module": "google-email:sendAnEmail",
+              "version": 4,
+              "parameters": {
+                "__IMTCONN__": 10637014
+              },
+              "mapper": {
+                "to": [
+                  "{{1.Email}}"
+                ],
+                "subject": "Cuidda · tu propuesta de cuidado ({{1.Codigo}})",
+                "bodyType": "text",
+                "emailHeaders": [
+                  {
+                    "key": "In-Reply-To",
+                    "value": "{{1.`Message ID Gmail`}}"
+                  },
+                  {
+                    "key": "References",
+                    "value": "{{1.`Message ID Gmail`}}"
+                  }
+                ],
+                "content": "{{1.`Propuesta generada`}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1200,
+                  "y": 300,
+                  "name": "[7] Gmail · Enviar propuesta a la familia"
+                }
+              },
+              "onerror": [
+                {
+                  "id": 101,
+                  "module": "airtable:ActionCreateRecord",
+                  "version": 3,
+                  "parameters": {
+                    "__IMTCONN__": 10636792
+                  },
+                  "mapper": {
+                    "base": "appxzAU6Buul0hoGw",
+                    "typecast": true,
+                    "useColumnId": false,
+                    "table": "tblY66MlpoRAAdtfc",
+                    "record": {
+                      "fldQnblJ1AkLgDgOS": "ERR-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+                      "fldpJhwJ9RQn2d9TK": "{{now}}",
+                      "fldCBS5b75LuRSu2m": "Escenario 2 Envio",
+                      "fldZbtjTPbFBJV5jR": "[7] Gmail Enviar propuesta",
+                      "fld7zqJB8MRrTFl1E": "Fallo de API de Gmail",
+                      "fldTHuHIKHsXUaGPU": "{{7.error.message}} | Codigo: {{1.Codigo}} | Para: {{1.Email}}",
+                      "fldx4zH5G04eTF4U5": "No"
+                    }
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1200,
+                      "y": 600,
+                      "name": "[7E] Airtable · Registrar fallo de envio"
+                    }
+                  }
+                },
+                {
+                  "id": 102,
+                  "module": "slack:CreateMessage",
+                  "version": 4,
+                  "parameters": {
+                    "__IMTCONN__": 11203706
+                  },
+                  "mapper": {
+                    "channelWType": "manualy",
+                    "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+                    "text": ":warning: *Cuidda · no se pudo enviar la propuesta*\n*Codigo:* {{1.Codigo}}\n*Error:* {{7.error.message}}\n_El estado queda en Aprobado y el flujo reintenta._",
+                    "parse": false,
+                    "mrkdwn": true
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1500,
+                      "y": 600,
+                      "name": "[7E] Slack · Alertar fallo de envio"
+                    }
+                  }
+                },
+                {
+                  "id": 103,
+                  "module": "builtin:Break",
+                  "version": 1,
+                  "mapper": {
+                    "retry": true,
+                    "interval": 15,
+                    "count": 3
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1800,
+                      "y": 600,
+                      "name": "[7E] Break · Detener con reintento"
+                    }
+                  }
+                }
+              ],
+              "filter": {
+                "name": "B · Listo para enviar",
+                "conditions": [
+                  [
+                    {
+                      "a": "{{if(length(trim(1.`Propuesta generada`)) = 0; \"vacia\"; \"lista\")}}",
+                      "b": "lista",
+                      "o": "text:equal"
+                    }
+                  ]
+                ]
+              }
+            },
+            {
+              "id": 8,
+              "module": "airtable:ActionUpdateRecords",
+              "version": 3,
+              "parameters": {
+                "__IMTCONN__": 10636792
+              },
+              "mapper": {
+                "base": "appxzAU6Buul0hoGw",
+                "typecast": true,
+                "useColumnId": false,
+                "table": "tbloHJ3bW32Tk892I",
+                "id": "{{1.id}}",
+                "record": {
+                  "fldBo9QKnm6IgDr5e": "Enviado",
+                  "fldZWRSRiUlC6PR20": "{{now}}"
+                }
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1500,
+                  "y": 300,
+                  "name": "[8] Airtable · Cerrar el ciclo (Enviado)"
+                }
+              }
+            },
+            {
+              "id": 9,
+              "module": "slack:CreateMessage",
+              "version": 4,
+              "parameters": {
+                "__IMTCONN__": 11203706
+              },
+              "mapper": {
+                "channelWType": "manualy",
+                "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+                "text": ":white_check_mark: *Cuidda · propuesta enviada*\n*Codigo:* {{1.Codigo}}  ·  *Familia:* {{1.Familia}}\n*Para:* {{1.Email}}\n_Estado actualizado a Enviado. Este registro ya no vuelve a entrar al flujo._",
+                "parse": false,
+                "mrkdwn": true,
+                "thread_ts": "{{1.`Slack ts`}}"
+              },
+              "metadata": {
+                "designer": {
+                  "x": 1800,
+                  "y": 300,
+                  "name": "[9] Slack · Confirmar envio en el hilo"
+                }
+              },
+              "onerror": [
+                {
+                  "id": 104,
+                  "module": "builtin:Resume",
+                  "version": 1,
+                  "mapper": {
+                    "answer": "Slack no respondio. El correo ya salio y la solicitud quedo en Enviado.",
+                    "AIUsage": {
+                      "inputTokens": "",
+                      "outputTokens": ""
+                    }
+                  },
+                  "metadata": {
+                    "designer": {
+                      "x": 1800,
+                      "y": 600,
+                      "name": "[9E] Resume · Seguir sin confirmacion en Slack"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "instant": false,
+    "version": 1,
+    "scenario": {
+      "roundtrips": 1,
+      "maxErrors": 3,
+      "autoCommit": true,
+      "autoCommitTriggerLast": true,
+      "sequential": false,
+      "slots": null,
+      "confidential": false,
+      "dataloss": false,
+      "dlq": true,
+      "freshVariables": false
+    },
+    "designer": {
+      "orphans": []
+    },
+    "zone": "us2.make.com",
+    "notes": []
+  }
+}
