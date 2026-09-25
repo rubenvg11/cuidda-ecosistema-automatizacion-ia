@@ -10,7 +10,8 @@
 
 <p align="center">
   <a href="https://rubenvg11.github.io/cuidda-ecosistema-automatizacion-ia/"><b>Panel de control en vivo</b></a> ·
-  <a href="Cuidda-Entrega-Final.pdf"><b>Informe completo (PDF)</b></a>
+  <a href="Cuidda-Entrega-Final.pdf"><b>Informe completo (PDF)</b></a> ·
+  <a href="Cuidda-demo-3min.mp4"><b>Video demo (3 min)</b></a>
 </p>
 
 ---
