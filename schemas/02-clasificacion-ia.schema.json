@@ -2,12 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cuidda.info/schemas/02-clasificacion-ia.schema.json",
   "title": "Contrato de salida del clasificador → módulo [9] Parsear clasificacion → [10] Router",
-  "description": "Es el contrato más importante del ecosistema: el módulo [8] (gpt-5-nano) debe devolver EXACTAMENTE este objeto, sin texto adicional y sin bloques de código. El módulo [9] lo parsea y el Router [10] decide la ruta leyendo únicamente 'datos_completos' y 'distrito_cubierto'.",
+  "description": "Es el contrato mas importante del ecosistema: el modulo [8] debe devolver EXACTAMENTE este objeto, sin texto adicional y sin bloques de codigo. El modulo [9] lo parsea y el Router [10] decide la ruta leyendo unicamente 'datos_completos' y 'distrito_cubierto'. Nota de diseno: la IA NO evalua la regla de cobertura. El modulo [4] lee de Airtable solo los distritos con Cubierto = Si, y el prompt recibe esa lista ya filtrada; la IA solo tiene que decir si el lugar que escribio la familia esta o no en ella.",
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "familia", "email", "telefono", "distrito", "turno", "prioridad",
-    "resumen", "monto_estimado", "datos_completos", "distrito_cubierto", "faltantes"
+    "familia",
+    "email",
+    "telefono",
+    "distrito_mencionado",
+    "distrito",
+    "turno",
+    "prioridad",
+    "resumen",
+    "monto_estimado",
+    "datos_completos",
+    "distrito_cubierto",
+    "faltantes"
   ],
   "properties": {
     "familia": {
@@ -22,21 +32,48 @@
       "type": "string",
       "pattern": "^[0-9]*$",
       "description": "SOLO dígitos, sin prefijo de país, sin espacios ni guiones. Make le antepone el prefijo que vive en Configuracion.prefijo_telefono_pais para escribirlo en E.164.",
-      "examples": ["987654321", ""]
+      "examples": [
+        "987654321",
+        ""
+      ]
+    },
+    "distrito_mencionado": {
+      "type": "string",
+      "description": "El lugar donde vive la familia, tal como lo escribio, en pocas palabras. Puede estar fuera de cobertura. Es lo que usa la ruta B para responderle a la familia por su nombre.",
+      "examples": [
+        "Laredo",
+        "el centro de Trujillo",
+        ""
+      ]
     },
     "distrito": {
       "type": "string",
-      "description": "Debe coincidir literalmente con un valor de la tabla Cobertura, o ser cadena vacía. La IA nunca inventa distritos.",
-      "examples": ["Huanchaco", "Trujillo Centro", ""]
+      "description": "Uno de los nombres de la lista DISTRITOS CON COBERTURA que el modulo [5] inyecta en el prompt, copiado caracter por caracter, o cadena vacia si el lugar que menciono la familia no esta en esa lista. Es el valor que se escribe en el campo vinculado de Solicitudes.",
+      "examples": [
+        "Huanchaco",
+        "Trujillo Centro",
+        ""
+      ]
     },
     "turno": {
       "type": "string",
       "description": "Debe coincidir literalmente con un valor de la tabla Catalogo de turnos, o ser cadena vacía.",
-      "enum": ["Manana", "Tarde", "Dia completo", "Noche", "24 horas", ""]
+      "enum": [
+        "Manana",
+        "Tarde",
+        "Dia completo",
+        "Noche",
+        "24 horas",
+        ""
+      ]
     },
     "prioridad": {
       "type": "string",
-      "enum": ["Alta", "Media", "Baja"],
+      "enum": [
+        "Alta",
+        "Media",
+        "Baja"
+      ],
       "description": "Alta solo si hay riesgo declarado para el paciente, alta hospitalaria en las próximas 48 h, o el cuidado empieza en menos de 24 h."
     },
     "resumen": {
@@ -48,17 +85,28 @@
       "type": "integer",
       "minimum": 0,
       "description": "Tarifa del turno + recargo de movilidad del distrito, en soles. 0 si falta el turno o el distrito.",
-      "examples": [190, 90, 175, 0]
+      "examples": [
+        190,
+        90,
+        175,
+        0
+      ]
     },
     "datos_completos": {
       "type": "string",
-      "enum": ["si", "no"],
-      "description": "BANDERA DE RUTEO. 'si' únicamente cuando email, distrito y turno tienen valor."
+      "enum": [
+        "si",
+        "no"
+      ],
+      "description": "BANDERA DE RUTEO. 'si' unicamente cuando email, distrito_mencionado y turno tienen valor. Ojo: pide distrito_mencionado, no distrito, para que un correo completo de un distrito sin cobertura caiga en la ruta B y no en la ruta A."
     },
     "distrito_cubierto": {
       "type": "string",
-      "enum": ["si", "no"],
-      "description": "BANDERA DE RUTEO. 'si' únicamente cuando el distrito aparece en Cobertura con Cubierto = Si."
+      "enum": [
+        "si",
+        "no"
+      ],
+      "description": "BANDERA DE RUTEO. 'si' unicamente cuando la clave distrito quedo con valor. No es un juicio de la IA: es consecuencia directa de haber encontrado o no el lugar en la lista ya filtrada por la base."
     },
     "faltantes": {
       "type": "string",
@@ -70,11 +118,12 @@
     "B · Fuera de cobertura": "datos_completos = 'si' Y distrito_cubierto = 'no'",
     "C · Solicitud valida": "datos_completos = 'si' Y distrito_cubierto = 'si'"
   },
-  "x-nota-de-exclusividad": "Las tres condiciones son mutuamente excluyentes y cubren todo el espacio de valores posibles: ningún bundle puede caer en dos rutas ni quedarse sin ruta. Todas comparan texto contra texto con el operador text:equal, nunca con notequal.",
+  "x-nota-de-exclusividad": "Las tres condiciones son mutuamente excluyentes y cubren todo el espacio de valores posibles: ningun bundle puede caer en dos rutas ni quedarse sin ruta. Todas comparan texto contra texto con el operador text:equal, nunca con notequal. En el blueprint de Make el AND se escribe como UN solo array interno -- conditions: [[c1, c2]] --; escribirlo como [[c1], [c2]] es un OR y hace que la ruta se dispare de mas.",
   "x-ejemplo-valido": {
     "familia": "Rosa Mendoza",
     "email": "rosa.mendoza@example.com",
     "telefono": "987654321",
+    "distrito_mencionado": "Huanchaco",
     "distrito": "Huanchaco",
     "turno": "Noche",
     "prioridad": "Alta",
@@ -88,6 +137,7 @@
     "familia": "Carlos Ríos",
     "email": "carlos.rios@example.com",
     "telefono": "",
+    "distrito_mencionado": "",
     "distrito": "",
     "turno": "",
     "prioridad": "Media",
@@ -96,5 +146,19 @@
     "datos_completos": "no",
     "distrito_cubierto": "no",
     "faltantes": "distrito, turno, telefono"
+  },
+  "x-ejemplo-fuera-de-cobertura": {
+    "familia": "Jorge Luis Ramirez Bocanegra",
+    "email": "jorge.ramirez@example.com",
+    "telefono": "973118460",
+    "distrito_mencionado": "Laredo",
+    "distrito": "",
+    "turno": "Tarde",
+    "prioridad": "Media",
+    "resumen": "Senora sola tras una caida, necesita acompanamiento por las tardes en Laredo.",
+    "monto_estimado": 0,
+    "datos_completos": "si",
+    "distrito_cubierto": "no",
+    "faltantes": ""
   }
 }
