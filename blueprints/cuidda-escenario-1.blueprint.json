@@ -74,14 +74,14 @@
         "base": "appxzAU6Buul0hoGw",
         "useColumnId": false,
         "table": "tblU7qF4h7IVgwGjQ",
-        "formula": "",
+        "formula": "{Cubierto} = \"Si\"",
         "maxRecords": "20"
       },
       "metadata": {
         "designer": {
           "x": 900,
           "y": 0,
-          "name": "[4] Airtable · Leer cobertura vigente"
+          "name": "[4] Airtable · Leer distritos con cobertura"
         }
       }
     },
@@ -94,7 +94,7 @@
         "feeder": 4
       },
       "mapper": {
-        "value": "- {{4.Distrito}} | Cubierto={{4.Cubierto}} | Recargo movilidad={{4.`Recargo movilidad soles`}}"
+        "value": "- {{4.Distrito}} | Recargo movilidad={{4.`Recargo movilidad soles`}}"
       },
       "metadata": {
         "designer": {
@@ -151,10 +151,10 @@
       "version": 2,
       "parameters": {
         "makeConnectionId": 10636489,
-        "model": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_id_clasificacion\"); 1) }}"
+        "model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
       },
       "mapper": {
-        "input": "Sos el sistema de admision de Cuidda, una plataforma que conecta familias con personal de salud verificado a domicilio en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }}, Peru.\nTu tarea es leer un correo entrante de una familia y devolver SOLO un objeto JSON valido, sin texto adicional y sin bloques de codigo.\n\nCLAVES EXACTAS QUE DEBES DEVOLVER:\nfamilia: nombre de la persona que escribe, string vacio si no aparece.\nemail: correo de contacto. Si el cuerpo no trae uno, usa el del remitente.\ntelefono: SOLO digitos, sin prefijo de pais, sin espacios ni guiones. String vacio si no aparece.\ndistrito: el distrito escrito tal cual aparece en la lista de COBERTURA. String vacio si no se menciona.\nturno: uno de los nombres exactos de la lista de CATALOGO DE TURNOS. String vacio si no se puede deducir.\nprioridad: Alta, Media o Baja. Alta solo si hay riesgo declarado para el paciente, una alta hospitalaria en las proximas 48 horas o el cuidado empieza en menos de 24 horas.\nresumen: maximo 30 palabras, en espanol, sin inventar nada.\nmonto_estimado: numero entero en soles. Tarifa del turno elegido mas el recargo de movilidad del distrito. 0 si falta el turno o el distrito.\ndatos_completos: si o no. Es 'si' unicamente cuando email, distrito y turno tienen valor.\ndistrito_cubierto: si o no. Es 'si' unicamente cuando el distrito aparece en COBERTURA con Cubierto=Si.\nfaltantes: lista en texto de que datos faltaron, string vacio si no falto ninguno.\n\nREGLAS DURAS: no inventes telefonos, distritos, turnos ni montos. Si un dato no esta en el correo, devolvelo vacio y marca datos_completos en no. Si el distrito no esta en COBERTURA, distrito_cubierto es no.\n\nCOBERTURA VIGENTE (fuente: tabla Cobertura):\n{{5.text}}\n\nCATALOGO DE TURNOS (fuente: tabla Catalogo de turnos):\n{{7.text}}\n\nCORREO A PROCESAR\nAsunto: {{1.subject}}\nRemitente: {{1.fromName}} <{{1.fromEmail}}>\nCuerpo:\n{{1.fullTextBody}}"
+        "input": "Sos el sistema de admision de Cuidda, una plataforma que conecta familias con personal de salud verificado a domicilio en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }}, Peru.\nTu tarea es leer un correo entrante de una familia y devolver SOLO un objeto JSON valido. Tu respuesta tiene que empezar con { y terminar con }. Nada de bloques de codigo, nada de acentos graves, ninguna palabra antes ni despues.\n\nCLAVES EXACTAS QUE DEBES DEVOLVER:\nfamilia: nombre de la persona que escribe, string vacio si no aparece.\nemail: correo de contacto. Si el cuerpo no trae uno, usa el del remitente.\ntelefono: SOLO digitos, sin prefijo de pais, sin espacios ni guiones. String vacio si no aparece.\ndistrito_mencionado: el lugar donde vive la familia, tal como lo escribio, en pocas palabras. String vacio si no lo menciona.\ndistrito: copia textualmente, caracter por caracter, uno de los nombres de la lista DISTRITOS CON COBERTURA. Si la familia escribe una variante (\"el centro de Trujillo\", \"centro\"), traducila al nombre exacto de esa lista. Si el lugar que menciona NO esta en esa lista, devolve string vacio. Nunca escribas un nombre que no este en la lista.\nturno: uno de los nombres exactos de la lista de CATALOGO DE TURNOS. String vacio si no se puede deducir.\nprioridad: Alta, Media o Baja. Alta solo si hay riesgo declarado para el paciente, una alta hospitalaria en las proximas 48 horas o el cuidado empieza en menos de 24 horas.\nresumen: maximo 30 palabras, en espanol, sin inventar nada.\nmonto_estimado: numero entero en soles. Tarifa del turno elegido mas el recargo de movilidad del distrito. 0 si falta el turno o el distrito.\ndatos_completos: si o no. Mira SOLO tres claves: email, distrito_mencionado y turno. Es 'si' cuando las tres tienen valor. NO mires la clave distrito para esto: un correo completo de un lugar que no esta en la lista de cobertura igual tiene datos_completos = si, porque a esa familia hay que contestarle. Solo es 'no' cuando el correo de verdad no dice donde vive, o no dice que turno necesita, o no hay forma de contactarla.\ndistrito_cubierto: si o no. Es 'si' unicamente cuando la clave distrito quedo con valor. Si distrito quedo vacio, es 'no'. No lo decidas vos: es consecuencia directa de si encontraste o no el lugar en la lista.\nfaltantes: lista en texto de que datos faltaron, string vacio si no falto ninguno.\n\nREGLAS DURAS: no inventes telefonos, distritos, turnos ni montos. Si un dato no esta en el correo, devolvelo vacio y marca datos_completos en no.\n\nDISTRITOS CON COBERTURA (fuente: tabla Cobertura, ya filtrada por la base: si un distrito NO aparece aca, Cuidda no lo cubre):\n{{5.text}}\n\nCATALOGO DE TURNOS (fuente: tabla Catalogo de turnos):\n{{7.text}}\n\nCORREO A PROCESAR\nAsunto: {{1.subject}}\nRemitente: {{1.fromName}} <{{1.fromEmail}}>\nCuerpo:\n{{1.fullTextBody}}"
       },
       "metadata": {
         "designer": {
@@ -243,7 +243,7 @@
         "type": ""
       },
       "mapper": {
-        "json": "{{8.answer}}"
+        "json": "{{trim(replace(replace(8.answer; \"```json\"; \"\"); \"```\"; \"\"))}}"
       },
       "metadata": {
         "designer": {
@@ -251,7 +251,78 @@
           "y": 0,
           "name": "[9] Parsear clasificacion"
         }
-      }
+      },
+      "onerror": [
+        {
+          "id": 106,
+          "module": "airtable:ActionCreateRecord",
+          "version": 3,
+          "parameters": {
+            "__IMTCONN__": 10636792
+          },
+          "mapper": {
+            "base": "appxzAU6Buul0hoGw",
+            "typecast": true,
+            "useColumnId": false,
+            "table": "tblY66MlpoRAAdtfc",
+            "record": {
+              "fldQnblJ1AkLgDgOS": "ERR-{{formatDate(now; \"YYYYMMDD-HHmmss\")}}",
+              "fldpJhwJ9RQn2d9TK": "{{now}}",
+              "fldCBS5b75LuRSu2m": "Escenario 1 Ingesta",
+              "fldZbtjTPbFBJV5jR": "[9] Parsear clasificacion",
+              "fld7zqJB8MRrTFl1E": "Respuesta de IA no parseable",
+              "fldTHuHIKHsXUaGPU": "{{9.error.message}} | Respuesta cruda: {{8.answer}}",
+              "fldx4zH5G04eTF4U5": "No"
+            }
+          },
+          "metadata": {
+            "designer": {
+              "x": 2400,
+              "y": 600,
+              "name": "[9E] Airtable · Registrar respuesta no parseable"
+            }
+          }
+        },
+        {
+          "id": 107,
+          "module": "slack:CreateMessage",
+          "version": 4,
+          "parameters": {
+            "__IMTCONN__": 11203706
+          },
+          "mapper": {
+            "channelWType": "manualy",
+            "channel": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"slack_canal_operaciones\"); 1) }}",
+            "text": ":broken_heart: *Cuidda · la IA devolvio algo que no es JSON*\n*Asunto:* {{1.subject}}\n*Error:* {{9.error.message}}\n_La ejecucion queda en Incomplete executions y se reintenta._",
+            "parse": false,
+            "mrkdwn": true
+          },
+          "metadata": {
+            "designer": {
+              "x": 2700,
+              "y": 600,
+              "name": "[9E] Slack · Alertar respuesta no parseable"
+            }
+          }
+        },
+        {
+          "id": 108,
+          "module": "builtin:Break",
+          "version": 1,
+          "mapper": {
+            "retry": true,
+            "interval": 15,
+            "count": 3
+          },
+          "metadata": {
+            "designer": {
+              "x": 3000,
+              "y": 600,
+              "name": "[9E] Break · Detener con reintento"
+            }
+          }
+        }
+      ]
     },
     {
       "id": 10,
@@ -302,8 +373,8 @@
                 "conditions": [
                   [
                     {
-                      "a": "{{9.datos_completos}}",
-                      "b": "no",
+                      "a": "{{if(length(trim(9.distrito_mencionado)) = 0; \"A\"; if(length(trim(9.turno)) = 0; \"A\"; if(length(trim(9.distrito)) = 0; \"B\"; \"C\")))}}",
+                      "b": "A",
                       "o": "text:equal"
                     }
                   ]
@@ -358,7 +429,7 @@
                   "fldteTrPCuGze1xNH": "{{9.prioridad}}",
                   "fldrCsA2FhCd8UqgW": "{{9.resumen}}",
                   "fldBo9QKnm6IgDr5e": "Rechazado",
-                  "fld41DhB7GzPaeEtU": "Fuera de cobertura: {{9.distrito}}",
+                  "fld41DhB7GzPaeEtU": "Fuera de cobertura: {{9.distrito_mencionado}}",
                   "fldDl9tqsFnzCRq2C": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_clasificacion\"); 1) }}",
                   "fldzxJRYLkmpV4rX9": false,
                   "fldas42PaE0GpjyaO": "{{1.threadId}}",
@@ -377,15 +448,8 @@
                 "conditions": [
                   [
                     {
-                      "a": "{{9.datos_completos}}",
-                      "b": "si",
-                      "o": "text:equal"
-                    }
-                  ],
-                  [
-                    {
-                      "a": "{{9.distrito_cubierto}}",
-                      "b": "no",
+                      "a": "{{if(length(trim(9.distrito_mencionado)) = 0; \"A\"; if(length(trim(9.turno)) = 0; \"A\"; if(length(trim(9.distrito)) = 0; \"B\"; \"C\")))}}",
+                      "b": "B",
                       "o": "text:equal"
                     }
                   ]
@@ -403,7 +467,7 @@
                 "to": [
                   "{{9.email}}"
                 ],
-                "subject": "Cuidda · todavia no llegamos a {{9.distrito}}",
+                "subject": "Cuidda · todavia no llegamos a {{9.distrito_mencionado}}",
                 "bodyType": "text",
                 "emailHeaders": [
                   {
@@ -415,7 +479,7 @@
                     "value": "{{1.headers.`message-id`}}"
                   }
                 ],
-                "content": "Hola {{9.familia}},\n\nGracias por escribirnos. Hoy Cuidda opera en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }} pero todavia no tenemos personal verificado disponible en {{9.distrito}}, y preferimos decirtelo antes que hacerte esperar por algo que no podemos cumplir.\n\nApenas abramos tu zona te avisamos.\n\n{{ get(map(3.array; \"Valor\"; \"Clave\"; \"firma_correo\"); 1) }}"
+                "content": "Hola {{9.familia}},\n\nGracias por escribirnos. Hoy Cuidda opera en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }} pero todavia no tenemos personal verificado disponible en {{9.distrito_mencionado}}, y preferimos decirtelo antes que hacerte esperar por algo que no podemos cumplir.\n\nApenas abramos tu zona te avisamos.\n\n{{ get(map(3.array; \"Valor\"; \"Clave\"; \"firma_correo\"); 1) }}"
               },
               "metadata": {
                 "designer": {
@@ -455,15 +519,8 @@
                 "conditions": [
                   [
                     {
-                      "a": "{{9.datos_completos}}",
-                      "b": "si",
-                      "o": "text:equal"
-                    }
-                  ],
-                  [
-                    {
-                      "a": "{{9.distrito_cubierto}}",
-                      "b": "si",
+                      "a": "{{if(length(trim(9.distrito_mencionado)) = 0; \"A\"; if(length(trim(9.turno)) = 0; \"A\"; if(length(trim(9.distrito)) = 0; \"B\"; \"C\")))}}",
+                      "b": "C",
                       "o": "text:equal"
                     }
                   ]
@@ -495,7 +552,7 @@
               "version": 2,
               "parameters": {
                 "makeConnectionId": 10636489,
-                "model": "{{ get(map(3.array; \"Valor\"; \"Clave\"; \"modelo_id_redaccion\"); 1) }}"
+                "model": "global.anthropic.claude-haiku-4-5-20251001-v1:0"
               },
               "mapper": {
                 "input": "Sos quien le responde a las familias en Cuidda, plataforma de cuidado de salud a domicilio en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"ciudad_operacion\"); 1) }}, Peru. Escribi el correo de propuesta que la familia va a leer.\n\nREGLAS DURAS:\n1) Usa unicamente los datos de la SOLICITUD y los hechos de la BASE DE CONOCIMIENTO. Si un dato no esta ahi, no lo escribas. Nunca inventes precios, porcentajes, cantidad de profesionales ni tiempos de respuesta.\n2) Nunca prometas diagnostico medico, atencion de emergencias ni disponibilidad inmediata garantizada.\n3) Tono cercano y directo, sin lenguaje corporativo vacio. Del otro lado hay alguien preocupado por un familiar.\n4) Estructura: saludo con el nombre, una linea que confirma que entendiste el pedido, el turno propuesto con su horario, el monto estimado en {{ get(map(3.array; \"Valor\"; \"Clave\"; \"moneda\"); 1) }}, una linea sobre como se verifica al personal, una linea sobre el pago, y el cierre.\n5) Deci que la propuesta tiene una vigencia de {{ get(map(3.array; \"Valor\"; \"Clave\"; \"horas_vigencia_propuesta\"); 1) }} horas.\n6) Tope duro de salida: {{ get(map(3.array; \"Valor\"; \"Clave\"; \"max_tokens_propuesta\"); 1) }} tokens, que son unas 200 palabras. Si te estas pasando, corta, no resumas a la mitad. Sin emojis. Firma: {{ get(map(3.array; \"Valor\"; \"Clave\"; \"firma_correo\"); 1) }}\n7) Devolve SOLO el cuerpo del correo, sin asunto y sin comillas.\n\nPensa paso a paso: primero mira que entradas de la base responden a lo que pregunta esta familia, despues escribi el correo apoyandote solo en esas.\n\nSOLICITUD\nFamilia: {{9.familia}}\nDistrito: {{9.distrito}}\nTurno: {{9.turno}}\nMonto estimado: {{9.monto_estimado}}\nResumen: {{9.resumen}}\n\nBASE DE CONOCIMIENTO (entradas atomicas verificadas de Cuidda):\n{{16.text}}"
