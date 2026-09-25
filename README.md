@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://rubenvg11.github.io/cuidda-ecosistema-automatizacion-ia/"><b>Panel de control en vivo</b></a> ·
-  <a href="docs/Cuidda-Entrega-Final.pdf"><b>Informe completo (PDF)</b></a>
+  <a href="Cuidda-Entrega-Final.pdf"><b>Informe completo (PDF)</b></a>
 </p>
 
 ---
@@ -27,14 +27,14 @@ Es la entrega final del curso de automatización, pero está construido sobre da
 |---|---|
 | Orquestador | **Make** · zona `us2` · 2 escenarios |
 | Base de datos y memoria | **Airtable** · base `Cuidda · Operaciones`, 6 tablas relacionadas |
-| Procesamiento IA | **gpt-5-nano** (clasificar) + **Claude Haiku 4.5** (redactar), vía Make AI Toolkit |
+| Procesamiento IA | **Claude Haiku 4.5** en los dos módulos, vía Make AI Toolkit — el clasificador arrancó en el modelo barato y el test de estrés lo descartó ([por qué](docs/03-optimizacion-de-costos.md)) |
 | Canal de salida | **Gmail** (a la familia, en el hilo original) + **Slack** (aprobación humana y alertas) |
 
 ## Cómo funciona
 
-### Escenario 1 · Ingesta y calificación IA — 25 módulos, 3 rutas
+### Escenario 1 · Ingesta y calificación IA — 28 módulos, 3 rutas
 
-Un correo entra por Gmail. El flujo lee la configuración, la cobertura y el catálogo de turnos desde Airtable, se los inyecta al clasificador, y rutea:
+Un correo entra por Gmail. El flujo lee la configuración, **los distritos con cobertura** (`{Cubierto} = "Si"`, filtrado por la base, no por la IA) y el catálogo de turnos desde Airtable, se los inyecta al clasificador, y rutea con una expresión que se calcula sobre los campos extraídos —**la ruta no la decide el modelo**:
 
 - **A · Dato faltante** → registra en `Log de errores`, avisa por Slack, corta. No gasta el modelo caro.
 - **B · Fuera de cobertura** → crea la solicitud como `Rechazado` y responde amablemente a la familia.
