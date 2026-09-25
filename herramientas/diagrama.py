@@ -84,14 +84,14 @@ lines(475, 288, ["[2] Airtable", "Leer configuracion"], 15, NAVY, weight="700")
 text(475, 324, "+ [3] Agregador de array", 12, GREY)
 
 rect(630, 250, 230, 100, WHITE, NAVY)
-lines(745, 282, ["[4] Airtable", "Leer cobertura", "+ [5] Compactar"], 14, NAVY, weight="700")
+lines(745, 276, ["[4] Airtable", "Distritos con cobertura", "filtro {Cubierto}=Si", "+ [5] Compactar"], 13, NAVY, weight="700")
 
 rect(900, 250, 230, 100, WHITE, NAVY)
 lines(1015, 282, ["[6] Airtable", "Leer catalogo turnos", "+ [7] Compactar"], 14, NAVY, weight="700")
 
 rect(1170, 245, 250, 110, PUR_S, PURP, rx=16)
 lines(1295, 282, ["[8] IA · Clasificar", "gpt-5-nano", "salida JSON estricta"], 14, PURP, weight="700")
-text(1295, 375, "el modelo sale de la tabla Configuracion", 12, GREY)
+text(1295, 375, "la cobertura ya viene filtrada por la base: la IA solo hace matching", 12, GREY)
 
 rect(1460, 260, 170, 80, WHITE, NAVY)
 text(1545, 305, "[9] Parse JSON", 15, NAVY, weight="700", family="Plus Jakarta Sans")

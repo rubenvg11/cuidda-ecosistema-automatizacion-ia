@@ -111,11 +111,27 @@ def text_agg(mid, x, y, name, feeder, value):
             "mapper": {"value": value}, "metadata": dsg(x, y, name)}
 
 
+# El clasificador arranco en el modelo "small" de Make AI Toolkit (la fila mas barata
+# de la matriz de costos). El test de estres lo descarto con datos: en 5 corridas fallo
+# 3 veces -- no hacia coincidir "el centro de Trujillo" con "Trujillo Centro", marcaba
+# Huanchaco como fuera de cobertura y erraba la aritmetica del monto. La decision de
+# costo se toma midiendo, no a priori. Ver criterio 3.
+MODELO_LITERAL = {
+    "modelo_id_clasificacion": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "modelo_id_redaccion": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+}
+
+
 def ai_ask(mid, x, y, name, model, prompt, onerror=None):
-    # El identificador del modelo NO esta hardcodeado: se lee de la tabla Configuracion
-    # en runtime. El campo Model del modulo acepta expresion cuando se activa "Map".
+    # El campo "model" del modulo ai-tools:Ask es un parametro de configuracion del
+    # modulo, no un campo mapeable: Make NO evalua IML dentro de parameters.model en
+    # tiempo de ejecucion. Se verifico contra el runtime (el modulo fallaba con el
+    # literal "{{ get(map(3.array; ...)) }}" como nombre de modelo). Por eso el
+    # identificador va literal y la tabla Configuracion guarda el nombre legible del
+    # modelo, que si se escribe dinamicamente en Solicitudes.Modelo usado.
+    valor = MODELO_LITERAL[model]
     m = {"id": mid, "module": "ai-tools:Ask", "version": 2,
-         "parameters": {"makeConnectionId": CONN_AI, "model": cfg(model)},
+         "parameters": {"makeConnectionId": CONN_AI, "model": valor},
          "mapper": {"input": prompt}, "metadata": dsg(x, y, name)}
     if onerror:
         m["onerror"] = onerror
@@ -123,7 +139,18 @@ def ai_ask(mid, x, y, name, model, prompt, onerror=None):
 
 
 def eq(a, b):
-    return [{"a": a, "b": b, "o": "text:equal"}]
+    """Una condicion suelta."""
+    return {"a": a, "b": b, "o": "text:equal"}
+
+
+def Y(*condiciones):
+    """AND entre condiciones.
+
+    Ojo con el formato de Make: en "conditions" el array EXTERNO es un OR y el
+    INTERNO es un AND. Escribir [[c1], [c2]] significa "c1 o c2" -- se verifico
+    en la UI, que muestra un "or" entre las dos filas. El AND real es [[c1, c2]].
+    """
+    return [list(condiciones)]
 
 
 META = {
@@ -137,24 +164,25 @@ META = {
 
 # =================================================================== ESCENARIO 1
 PROMPT_CLASIFICA = """Sos el sistema de admision de Cuidda, una plataforma que conecta familias con personal de salud verificado a domicilio en {ciudad}, Peru.
-Tu tarea es leer un correo entrante de una familia y devolver SOLO un objeto JSON valido, sin texto adicional y sin bloques de codigo.
+Tu tarea es leer un correo entrante de una familia y devolver SOLO un objeto JSON valido. Tu respuesta tiene que empezar con { y terminar con }. Nada de bloques de codigo, nada de acentos graves, ninguna palabra antes ni despues.
 
 CLAVES EXACTAS QUE DEBES DEVOLVER:
 familia: nombre de la persona que escribe, string vacio si no aparece.
 email: correo de contacto. Si el cuerpo no trae uno, usa el del remitente.
 telefono: SOLO digitos, sin prefijo de pais, sin espacios ni guiones. String vacio si no aparece.
-distrito: el distrito escrito tal cual aparece en la lista de COBERTURA. String vacio si no se menciona.
+distrito_mencionado: el lugar donde vive la familia, tal como lo escribio, en pocas palabras. String vacio si no lo menciona.
+distrito: copia textualmente, caracter por caracter, uno de los nombres de la lista DISTRITOS CON COBERTURA. Si la familia escribe una variante ("el centro de Trujillo", "centro"), traducila al nombre exacto de esa lista. Si el lugar que menciona NO esta en esa lista, devolve string vacio. Nunca escribas un nombre que no este en la lista.
 turno: uno de los nombres exactos de la lista de CATALOGO DE TURNOS. String vacio si no se puede deducir.
 prioridad: Alta, Media o Baja. Alta solo si hay riesgo declarado para el paciente, una alta hospitalaria en las proximas 48 horas o el cuidado empieza en menos de 24 horas.
 resumen: maximo 30 palabras, en espanol, sin inventar nada.
 monto_estimado: numero entero en soles. Tarifa del turno elegido mas el recargo de movilidad del distrito. 0 si falta el turno o el distrito.
-datos_completos: si o no. Es 'si' unicamente cuando email, distrito y turno tienen valor.
-distrito_cubierto: si o no. Es 'si' unicamente cuando el distrito aparece en COBERTURA con Cubierto=Si.
+datos_completos: si o no. Mira SOLO tres claves: email, distrito_mencionado y turno. Es 'si' cuando las tres tienen valor. NO mires la clave distrito para esto: un correo completo de un lugar que no esta en la lista de cobertura igual tiene datos_completos = si, porque a esa familia hay que contestarle. Solo es 'no' cuando el correo de verdad no dice donde vive, o no dice que turno necesita, o no hay forma de contactarla.
+distrito_cubierto: si o no. Es 'si' unicamente cuando la clave distrito quedo con valor. Si distrito quedo vacio, es 'no'. No lo decidas vos: es consecuencia directa de si encontraste o no el lugar en la lista.
 faltantes: lista en texto de que datos faltaron, string vacio si no falto ninguno.
 
-REGLAS DURAS: no inventes telefonos, distritos, turnos ni montos. Si un dato no esta en el correo, devolvelo vacio y marca datos_completos en no. Si el distrito no esta en COBERTURA, distrito_cubierto es no.
+REGLAS DURAS: no inventes telefonos, distritos, turnos ni montos. Si un dato no esta en el correo, devolvelo vacio y marca datos_completos en no.
 
-COBERTURA VIGENTE (fuente: tabla Cobertura):
+DISTRITOS CON COBERTURA (fuente: tabla Cobertura, ya filtrada por la base: si un distrito NO aparece aca, Cuidda no lo cubre):
 {{5.text}}
 
 CATALOGO DE TURNOS (fuente: tabla Catalogo de turnos):
@@ -209,9 +237,10 @@ def escenario_1():
           "mapper": {"Clave": "{{2.Clave}}", "Valor": "{{2.Valor}}"},
           "metadata": dsg(600, 0, "[3] Tools · Compactar configuracion")}
 
-    m4 = airtable_search(4, 900, 0, "[4] Airtable · Leer cobertura vigente", T_COB)
+    m4 = airtable_search(4, 900, 0, "[4] Airtable · Leer distritos con cobertura",
+                         T_COB, formula='{Cubierto} = "Si"')
     m5 = text_agg(5, 1200, 0, "[5] Tools · Compactar cobertura", 4,
-                  "- {{4.Distrito}} | Cubierto={{4.Cubierto}} | Recargo movilidad={{4.`Recargo movilidad soles`}}")
+                  "- {{4.Distrito}} | Recargo movilidad={{4.`Recargo movilidad soles`}}")
 
     m6 = airtable_search(6, 1500, 0, "[6] Airtable · Leer catalogo de turnos", T_CAT)
     m7 = text_agg(7, 1800, 0, "[7] Tools · Compactar catalogo de turnos", 6,
@@ -231,16 +260,44 @@ def escenario_1():
     m8 = ai_ask(8, 2100, 0, "[8] IA · Extraer y clasificar solicitud",
                 "modelo_id_clasificacion", PROMPT_CLASIFICA, onerror=err8)
 
+    # Los modelos de la familia Claude devuelven el JSON envuelto en un bloque de
+    # codigo (```json ... ```) aunque el prompt lo prohiba. El parser no acepta eso,
+    # asi que la respuesta se normaliza ANTES de parsear en vez de confiar en que el
+    # modelo obedezca. Es la misma idea que el trim() del Escenario 2: normalizar y
+    # despues comparar.
+    err9 = [
+        log_error(106, 2400, 600, "[9E] Airtable · Registrar respuesta no parseable",
+                  "Escenario 1 Ingesta", "[9] Parsear clasificacion",
+                  "Respuesta de IA no parseable",
+                  "{{9.error.message}} | Respuesta cruda: {{8.answer}}"),
+        slack_msg(107, 2700, 600, "[9E] Slack · Alertar respuesta no parseable",
+                  ":broken_heart: *Cuidda · la IA devolvio algo que no es JSON*\n"
+                  "*Asunto:* {{1.subject}}\n*Error:* {{9.error.message}}\n"
+                  "_La ejecucion queda en Incomplete executions y se reintenta._"),
+        brk(108, 3000, 600, "[9E] Break · Detener con reintento"),
+    ]
     m9 = {"id": 9, "module": "json:ParseJSON", "version": 1, "parameters": {"type": ""},
-          "mapper": {"json": "{{8.answer}}"},
-          "metadata": dsg(2400, 0, "[9] Parsear clasificacion")}
+          "mapper": {"json": '{{trim(replace(replace(8.answer; "```json"; ""); "```"; ""))}}'},
+          "metadata": dsg(2400, 0, "[9] Parsear clasificacion"),
+          "onerror": err9}
+
+    # La ruta NO la decide el modelo. El modelo extrae campos; el flujo deriva la
+    # ruta de esos campos con una expresion unica, normalizando con trim() antes de
+    # comparar. Son tres valores mutuamente excluyentes y cada ruta pregunta por uno
+    # con text:equal, igual que el router del Escenario 2.
+    #   A  falta el lugar o falta el turno  -> no se puede cotizar nada
+    #   B  hay datos pero el lugar no esta en la lista de cobertura de la base
+    #   C  hay datos y el lugar esta cubierto
+    RUTA = ('{{if(length(trim(9.distrito_mencionado)) = 0; "A"; '
+            'if(length(trim(9.turno)) = 0; "A"; '
+            'if(length(trim(9.distrito)) = 0; "B"; "C")))}}')
 
     # -------- ruta A: dato faltante
     r_a_1 = log_error(11, 3000, -300, "[11] Airtable · Registrar error de validacion",
                       "Escenario 1 Ingesta", "[10] Router ruta A", "Dato faltante",
                       "Faltan: {{9.faltantes}} | De: {{1.fromEmail}} | Asunto: {{1.subject}}")
     r_a_1["filter"] = {"name": "A · Dato faltante",
-                       "conditions": [eq("{{9.datos_completos}}", "no")]}
+                       "conditions": Y(eq(RUTA, "A"))}
     r_a_2 = slack_msg(12, 3300, -300, "[12] Slack · Alertar dato faltante",
                       ":mag: *Cuidda · solicitud incompleta*\n"
                       "*De:* {{1.fromName}} <{{1.fromEmail}}>\n*Asunto:* {{1.subject}}\n"
@@ -259,26 +316,25 @@ def escenario_1():
                                 S["prioridad"]: "{{9.prioridad}}",
                                 S["resumen"]: "{{9.resumen}}",
                                 S["estado"]: "Rechazado",
-                                S["motivo"]: "Fuera de cobertura: {{9.distrito}}",
+                                S["motivo"]: "Fuera de cobertura: {{9.distrito_mencionado}}",
                                 S["modelo"]: cfg("modelo_clasificacion"),
                                 S["aprobado"]: False,
                                 S["hilo"]: "{{1.threadId}}",
                                 S["msgid"]: "{{1.headers.`message-id`}}",
                             })
     r_b_1["filter"] = {"name": "B · Fuera de cobertura",
-                       "conditions": [eq("{{9.datos_completos}}", "si"),
-                                      eq("{{9.distrito_cubierto}}", "no")]}
+                       "conditions": Y(eq(RUTA, "B"))}
     r_b_2 = {"id": 14, "module": "google-email:sendAnEmail", "version": 4,
              "parameters": {"__IMTCONN__": CONN_GMAIL},
              "mapper": {"to": ["{{9.email}}"],
-                        "subject": "Cuidda · todavia no llegamos a {{9.distrito}}",
+                        "subject": "Cuidda · todavia no llegamos a {{9.distrito_mencionado}}",
                         "bodyType": "text",
                         "emailHeaders": [
                             {"key": "In-Reply-To", "value": "{{1.headers.`message-id`}}"},
                             {"key": "References", "value": "{{1.headers.`message-id`}}"}],
                         "content": "Hola {{9.familia}},\n\nGracias por escribirnos. Hoy Cuidda opera en "
                                    + cfg("ciudad_operacion") +
-                                   " pero todavia no tenemos personal verificado disponible en {{9.distrito}}, "
+                                   " pero todavia no tenemos personal verificado disponible en {{9.distrito_mencionado}}, "
                                    "y preferimos decirtelo antes que hacerte esperar por algo que no podemos cumplir.\n\n"
                                    "Apenas abramos tu zona te avisamos.\n\n" + cfg("firma_correo")},
              "metadata": dsg(3300, 0, "[14] Gmail · Responder fuera de cobertura")}
@@ -287,8 +343,7 @@ def escenario_1():
     r_c_1 = airtable_search(15, 3000, 300, "[15] Airtable · Leer base de conocimiento",
                             T_KB, formula='{Activo} = "Si"')
     r_c_1["filter"] = {"name": "C · Solicitud valida",
-                       "conditions": [eq("{{9.datos_completos}}", "si"),
-                                      eq("{{9.distrito_cubierto}}", "si")]}
+                       "conditions": Y(eq(RUTA, "C"))}
     r_c_2 = text_agg(16, 3300, 300, "[16] Tools · Compactar contexto RAG", 15,
                      "- {{15.Tema}} ({{15.Categoria}}): {{15.Contenido}}")
     err17 = [
@@ -366,7 +421,7 @@ def escenario_2():
                    "Escenario 2 Envio", "[4] Router ruta A", "Propuesta vacia",
                    "La solicitud {{1.Codigo}} fue aprobada pero no tiene propuesta generada. No se envio nada.")
     a1["filter"] = {"name": "A · Propuesta vacia",
-                    "conditions": [eq(PROPUESTA_ESTADO, "vacia")]}
+                    "conditions": Y(eq(PROPUESTA_ESTADO, "vacia"))}
     a2 = slack_msg(6, 1500, -300, "[6] Slack · Alertar propuesta vacia",
                    ":no_entry: *Cuidda · aprobacion bloqueada*\n"
                    "*Codigo:* {{1.Codigo}}  ·  *Familia:* {{1.Familia}}\n"
@@ -398,7 +453,7 @@ def escenario_2():
           "metadata": dsg(1200, 300, "[7] Gmail · Enviar propuesta a la familia"),
           "onerror": err7}
     b1["filter"] = {"name": "B · Listo para enviar",
-                    "conditions": [eq(PROPUESTA_ESTADO, "lista")]}
+                    "conditions": Y(eq(PROPUESTA_ESTADO, "lista"))}
 
     b2 = airtable_update(8, 1500, 300, "[8] Airtable · Cerrar el ciclo (Enviado)",
                          T_SOL, "{{1.id}}",
