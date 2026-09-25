@@ -60,7 +60,7 @@ Cada salto entre nodos tiene un contrato explícito. Están en [`schemas/`](../s
 | # | Archivo | Qué contrato describe |
 |---|---|---|
 | 01 | [`01-gmail-a-clasificador`](../schemas/01-gmail-a-clasificador.schema.json) | Correo entrante → módulo `[8]`. Incluye la lista de campos **descartados** por minimización de datos. |
-| 02 | [`02-clasificacion-ia`](../schemas/02-clasificacion-ia.schema.json) | **El contrato central**: las 11 claves que el clasificador debe devolver, la tabla de ruteo y dos ejemplos (camino feliz y camino infeliz). |
+| 02 | [`02-clasificacion-ia`](../schemas/02-clasificacion-ia.schema.json) | **El contrato central**: las 12 claves que el clasificador debe devolver, la tabla de ruteo y tres ejemplos (camino feliz, fuera de cobertura y camino infeliz). |
 | 03 | [`03-solicitud-airtable`](../schemas/03-solicitud-airtable.schema.json) | El record escrito en `Solicitudes`, indexado por `fieldId` y no por nombre. |
 | 04 | [`04-log-de-errores`](../schemas/04-log-de-errores.schema.json) | El record de error, con la directiva (`Break` / `Resume` / sin reintento) que corresponde a cada tipo. |
 | 05 | [`05-airtable-a-escenario-2`](../schemas/05-airtable-a-escenario-2.schema.json) | El handoff entre escenarios. Airtable no es solo destino: es el bus de mensajes. |
@@ -68,13 +68,14 @@ Cada salto entre nodos tiene un contrato explícito. Están en [`schemas/`](../s
 
 ### El contrato que más importa
 
-El módulo `[8]` devuelve texto. El módulo `[9]` lo parsea. El router `[10]` decide. Si ese texto no es JSON válido con esas 11 claves exactas, todo lo que sigue se cae. Por eso el prompt lo declara clave por clave y el esquema lo fija con `additionalProperties: false` y enums cerrados:
+El módulo `[8]` devuelve texto. El módulo `[9]` lo parsea. El router `[10]` decide. Si ese texto no es JSON válido con esas 12 claves exactas, todo lo que sigue se cae. Por eso el prompt lo declara clave por clave y el esquema lo fija con `additionalProperties: false` y enums cerrados:
 
 ```json
 {
   "familia": "Rosa Mendoza",
   "email": "rosa.mendoza@example.com",
   "telefono": "987654321",
+  "distrito_mencionado": "Huanchaco",
   "distrito": "Huanchaco",
   "turno": "Noche",
   "prioridad": "Alta",
@@ -85,6 +86,10 @@ El módulo `[8]` devuelve texto. El módulo `[9]` lo parsea. El router `[10]` de
   "faltantes": ""
 }
 ```
+
+Hay **dos claves de distrito y no una**, y la diferencia es el corazón del ruteo. `distrito_mencionado` es lo que escribió la familia, sea lo que sea: *"Laredo"*, *"el centro de Trujillo"*, *"acá por Moche"*. `distrito` solo tiene valor si ese lugar aparece en la lista de distritos con cobertura que la base inyectó en el prompt. De ahí sale `distrito_cubierto`, que no es un juicio de la IA sino la consecuencia de haber encontrado o no una coincidencia.
+
+Esto también es lo que permite que un correo completo de un distrito sin cobertura caiga en la **ruta B** (se le responde) y no en la **ruta A** (dato faltante): `datos_completos` mira `distrito_mencionado`, no `distrito`.
 
 `telefono` sale **sin prefijo y solo con dígitos** a propósito: el prefijo lo pone Make leyendo `Configuracion.prefijo_telefono_pais`, y el resultado se escribe como `+51987654321` en un campo de tipo *Número de teléfono*. Así el `+` no se pierde y el formato E.164 no depende de que la IA se acuerde de ponerlo.
 

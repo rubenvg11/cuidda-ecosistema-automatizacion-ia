@@ -89,6 +89,17 @@ Hacen falta **dos acciones humanas distintas** (marcar la casilla y cambiar el e
 
 Son mutuamente excluyentes y cubren todo el espacio de valores: ningún bundle puede caer en dos rutas ni quedarse sin ninguna. *(Esto corrige directamente la observación del profesor sobre el filtro de la ruta "Baja", donde un `notequal` se solapaba con la ruta "Alta".)*
 
+**El AND del blueprint se escribe de una sola forma, y no es la intuitiva.** Esto costó una tarde entera de test y merece quedar escrito. En el JSON de un blueprint de Make, el campo `conditions` es un array de arrays: el **array externo es un OR** y el **interno es un AND**.
+
+```json
+"conditions": [[c1], [c2]]     // c1 O c2      ← lo que parece un AND y no lo es
+"conditions": [[c1, c2]]       // c1 Y c2      ← el AND de verdad
+```
+
+Escrito de la primera forma, la ruta B pasaba a ser *"datos_completos = si **o** distrito_cubierto = no"*, que es verdadera casi siempre: **todas** las solicitudes se registraban además como rechazadas y el test de estrés creaba dos filas por corrida. El síntoma en History era claro una vez que se sabía qué mirar — 17 operaciones donde la ruta C sola son 15 — pero el blueprint se veía perfectamente razonable.
+
+La forma de verificarlo no es leer el JSON: es abrir el filtro en la UI de Make después de importar. Si entre las dos condiciones dice **or** en vez de **and**, el blueprint está mal aunque el escenario corra sin errores. Es la clase de bug que no rompe nada, solo hace lo incorrecto en silencio.
+
 En el router del Escenario 2 el problema era distinto: había que preguntar si un campo de texto largo está vacío. En vez de comparar el campo contra `""` — que es donde se cuelan los espacios y los saltos de línea — se normaliza primero y se compara contra un enum:
 
 ```

@@ -10,16 +10,18 @@ El diagrama completo está en [`evidencias/arquitectura-cuidda.png`](../evidenci
 
 **Trigger.** `[1] Gmail · Nueva solicitud entrante` observa la bandeja con el filtro `is:unread subject:(solicitud de cuidado)` y arranca en **From now on**: Make guarda la marca de tiempo del arranque y nunca procesa correo viejo. Un correo leído queda marcado como visto (`markSeen`), así que no puede volver a entrar.
 
-**Carga de contexto (3 lecturas + 3 agregadores).** Antes de llamar a la IA, el flujo lee de Airtable la configuración del sistema `[2]`, la cobertura vigente `[4]` y el catálogo de turnos `[6]`, y los compacta `[3] [5] [7]`. Esto es lo que hace que el prompt sea dinámico: si mañana Cuidda abre un distrito nuevo o cambia una tarifa, el prompt cambia solo.
+**Carga de contexto (3 lecturas + 3 agregadores).** Antes de llamar a la IA, el flujo lee de Airtable la configuración del sistema `[2]`, los distritos con cobertura `[4]` y el catálogo de turnos `[6]`, y los compacta `[3] [5] [7]`. Esto es lo que hace que el prompt sea dinámico: si mañana Cuidda abre un distrito nuevo o cambia una tarifa, el prompt cambia solo.
 
-**Motor de IA `[8]`.** `gpt-5-nano` recibe el correo junto con la cobertura y el catálogo reales, y devuelve un JSON de 11 claves. Su identificador de modelo sale de la tabla `Configuracion`.
+**La regla de negocio no la evalúa la IA.** El módulo `[4]` no lee la tabla `Cobertura` entera: la lee con la fórmula `{Cubierto} = "Si"`. El prompt recibe una lista que **ya está filtrada por la base de datos**, y la única pregunta que le queda a la IA es *"¿el lugar que escribió esta familia está en esta lista?"*. Esto no es un detalle de implementación: es la diferencia entre pedirle a un modelo barato que lea una columna `Si/No` por línea —que es donde se equivocaba en las pruebas— y pedirle que haga coincidir un nombre contra un listado. La regla de quién tiene cobertura vive en Airtable, donde se puede auditar y cambiar sin tocar un prompt.
+
+**Motor de IA `[8]`.** `gpt-5-nano` recibe el correo junto con la cobertura y el catálogo reales, y devuelve un JSON de 12 claves. (Sobre el identificador del modelo, ver el criterio 3: la intención era leerlo de `Configuracion` y Make no lo permite en ese campo.)
 
 **Parseo y ruteo `[9]` `[10]`.** El JSON se parsea y el router decide leyendo solo dos banderas: `datos_completos` y `distrito_cubierto`.
 
 | Ruta | Condición | Qué hace |
 |---|---|---|
 | **A · Dato faltante** | `datos_completos = "no"` | `[11]` registra en `Log de errores` con la lista de lo que faltó · `[12]` avisa por Slack. No se crea solicitud y no se gasta el modelo caro. |
-| **B · Fuera de cobertura** | `datos_completos = "si"` y `distrito_cubierto = "no"` | `[13]` crea la solicitud como `Rechazado` con el motivo · `[14]` responde a la familia por Gmail, en el mismo hilo. Sin propuesta: no tiene sentido redactar algo que no se puede cumplir. |
+| **B · Fuera de cobertura** | `datos_completos = "si"` y `distrito_cubierto = "no"` | `[13]` crea la solicitud como `Rechazado` con el motivo · `[14]` responde a la familia por Gmail, en el mismo hilo, nombrando el lugar tal como ella lo escribió (`distrito_mencionado`). Sin propuesta: no tiene sentido redactar algo que no se puede cumplir. |
 | **C · Solicitud válida** | `datos_completos = "si"` y `distrito_cubierto = "si"` | `[15]` lee la base de conocimiento (RAG) · `[16]` la compacta · `[17]` Claude Haiku 4.5 redacta la propuesta · `[18]` crea la solicitud vinculada a Cobertura y a Catálogo de turnos · `[19]` pide aprobación en Slack · `[20]` guarda el `ts` de ese mensaje para poder responder en el hilo. |
 
 **Pausa.** El Escenario 1 termina en `[19]`/`[20]`. No hay rama que envíe nada a la familia por su cuenta.

@@ -77,16 +77,19 @@ El módulo `ai-tools:Ask` de Make AI Toolkit **no expone un parámetro de max to
 2. **En el clasificador, acotando la salida por diseño.** Devuelve 11 claves y `resumen` tiene tope de 30 palabras. La salida no puede crecer.
 3. **En el contexto de entrada.** Los tres `Search Records` que alimentan los prompts tienen `maxRecords: 20`. La cobertura, el catálogo y la base de conocimiento no pueden inflar el prompt sin límite aunque las tablas crezcan.
 
-## 3.5 El identificador del modelo tampoco está hardcodeado
+## 3.5 El identificador del modelo: lo que quisimos hacer y lo que se puede
 
-El campo `Model` del módulo de IA admite expresión (toggle *Map*), así que en los dos módulos vale:
+La intención era leer el identificador del modelo de `Configuracion` igual que todo lo demás:
 
 ```
 {{ get(map(3.array; "Valor"; "Clave"; "modelo_id_clasificacion"); 1) }}
-{{ get(map(3.array; "Valor"; "Clave"; "modelo_id_redaccion"); 1) }}
 ```
 
-Cambiar de modelo — por precio, por calidad o porque salió uno nuevo — es editar una celda de la tabla `Configuracion` y no tocar ningún escenario. El nombre legible del modelo se guarda además en `Solicitudes.Modelo usado`, así que el costo real es auditable solicitud por solicitud desde el dashboard.
+**No funciona, y vale la pena contarlo.** El campo `Model` de `ai-tools:Ask` no es un campo mapeable del bundle: es un parámetro de configuración del módulo. Make no evalúa IML ahí en tiempo de ejecución, así que el escenario intentaba invocar un modelo llamado literalmente `{{ get(map(3.array; ...` y el módulo fallaba. Lo detectamos en la tabla `Log de errores`, en el campo `Detalle`, que trae el mensaje textual del proveedor — exactamente para lo que se diseñó esa tabla.
+
+Así que el identificador va literal en los dos módulos, y lo que sí es dinámico es el **nombre legible** del modelo, que se lee de `Configuracion` y se escribe en `Solicitudes.Modelo usado` en cada solicitud. El costo real sigue siendo auditable solicitud por solicitud desde el dashboard; cambiar de modelo son dos ediciones en Make en vez de una celda en Airtable.
+
+Preferimos dejar esto escrito antes que mostrar una captura del blueprint con la expresión adentro y no decir que no se evalúa.
 
 ## 3.6 El costo de no hardcodear nada
 
